@@ -248,6 +248,18 @@ EOF
 	    fi
 	fi
 
+if echo "$GRUB_TERMINAL_OUTPUT" | grep -qwv console &&
+  ([ x"$GRUB_TIMEOUT_STYLE" = xmenu ] ||
+   ([ x"$GRUB_TIMEOUT_STYLE" = x ] &&
+    [ x"$GRUB_HIDDEN_TIMEOUT" = x -o x"$GRUB_HIDDEN_TIMEOUT" = x0 ])); then
+    cat <<EOF
+  if [ "\${grub_platform}" = "efi" ]; then
+    clear
+    echo "Please press 't' to show the boot menu on this console"
+  fi
+EOF
+fi
+
     cat << EOF
   set gfxmode=${GRUB_GFXMODE}
   load_video
