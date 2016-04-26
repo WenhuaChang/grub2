@@ -78,7 +78,7 @@ grub_normal_add_menu_entry (int argc, const char **args,
 			    char **classes, const char *id,
 			    const char *users, const char *hotkey,
 			    const char *prefix, const char *sourcecode,
-			    int submenu, grub_blsuki_entry_t *blsuki)
+			    int submenu, grub_blsuki_entry_t *blsuki, int hidden)
 {
   int menu_hotkey = 0;
   char **menu_args = NULL;
@@ -189,8 +189,11 @@ grub_normal_add_menu_entry (int argc, const char **args,
   (*last)->sourcecode = menu_sourcecode;
   (*last)->submenu = submenu;
   (*last)->blsuki = blsuki;
+  (*last)->hidden = hidden;
 
-  menu->size++;
+  if (!hidden)
+    menu->size++;
+
   return GRUB_ERR_NONE;
 
  fail:
@@ -291,7 +294,8 @@ grub_cmd_menuentry (grub_extcmd_context_t ctxt, int argc, char **args)
 				       ctxt->state[2].arg, 0,
 				       ctxt->state[3].arg,
 				       ctxt->extcmd->cmd->name[0] == 's',
-				       NULL);
+				       NULL,
+				       ctxt->extcmd->cmd->name[0] == 'h');
 
   src = args[argc - 1];
   args[argc - 1] = NULL;
@@ -308,7 +312,8 @@ grub_cmd_menuentry (grub_extcmd_context_t ctxt, int argc, char **args)
 				  ctxt->state[0].args, ctxt->state[4].arg,
 				  users,
 				  ctxt->state[2].arg, prefix, src + 1,
-				  ctxt->extcmd->cmd->name[0] == 's', NULL);
+				  ctxt->extcmd->cmd->name[0] == 's', NULL,
+				  ctxt->extcmd->cmd->name[0] == 'h');
 
   src[len - 1] = ch;
   args[argc - 1] = src;
@@ -316,7 +321,7 @@ grub_cmd_menuentry (grub_extcmd_context_t ctxt, int argc, char **args)
   return r;
 }
 
-static grub_extcmd_t cmd, cmd_sub;
+static grub_extcmd_t cmd, cmd_sub, cmd_hidden;
 
 void
 grub_menu_init (void)
@@ -332,6 +337,13 @@ grub_menu_init (void)
 				  | GRUB_COMMAND_FLAG_EXTRACTOR,
 				  N_("BLOCK"), N_("Define a submenu."),
 				  options);
+  cmd_hidden = grub_register_extcmd ("hiddenentry", grub_cmd_menuentry,
+				     GRUB_COMMAND_FLAG_BLOCKS
+				     | GRUB_COMMAND_ACCEPT_DASH
+				     | GRUB_COMMAND_FLAG_EXTRACTOR,
+				     N_("BLOCK"),
+				     N_("Define a hidden menu entry."),
+				     options);
 }
 
 void
