@@ -2794,3 +2794,9 @@ module = {
   name = cmdline;
   common = lib/cmdline.c;
 };
+
+module = {
+  name = prep_loadenv;
+  common = commands/prep_loadenv.c;
+  enable = powerpc_ieee1275;
+};
