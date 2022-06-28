@@ -1,18 +1,6 @@
-main_workflow:
+workflow:
   steps:
     - branch_package:
         source_project: home:michael-chang:obs_scm-webhook
         source_package: grub2
         target_project: home:michael-chang:obs_scm-webhook:CI
-  filters:
-    event: pull_request
-rebuild_master:
-  steps:
-    - rebuild_package:
-        project: home:michael-chang:obs_scm-webhook
-        package: grub2
-  filters:
-    event: push
-    branches:
-      only:
-        - master
