@@ -22,9 +22,5 @@ jobs:
       run: ./bootstrap
     - name: configure
       run: ./configure --with-platform=emu
-    - name: make
-      run: make
-    - name: make check
-      run: make check || true
     - name: make distcheck
       run: make distcheck || true
