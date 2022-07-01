@@ -17,15 +17,15 @@ jobs:
     - run: ./bootstrap
     - name: build for pc platform
     - run: |
-    mkdir -p build-pc
-    cd build-pc
-    ../configure --with-platform=pc
-    make
-    cd ..
+      mkdir -p build-pc
+      cd build-pc
+      ../configure --with-platform=pc
+      make
+      cd ..
     - name: build for efi platform
     - run: |
-    mkdir -p build-efi
-    cd build-efi
-    ../configure --with-platform=efi
-    make
-    cd ..
+      mkdir -p build-efi
+      cd build-efi
+      ../configure --with-platform=efi
+      make
+      cd ..
