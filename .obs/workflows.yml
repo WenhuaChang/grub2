@@ -21,3 +21,16 @@ workflow:
             architectures:
               - ppc64
               - ppc64le
+          - name: openSUSE_Factory_ARM
+            paths:
+              - target_project: openSUSE:Factory:ARM
+                target_repository: standard
+            architectures:
+              - armv7l
+              - aarch64
+          - name: openSUSE_Factory_RISCV
+            paths:
+              - target_project: openSUSE:Factory:RISCV
+                target_repository: standard
+            architectures:
+              - riscv64
