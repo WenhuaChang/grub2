@@ -207,6 +207,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	    fi
 	fi
 	qemuopts="-machine q35 $qemuopts"
+	netbootext=efi
 	;;
     x86_64-efi)
 	qemu=qemu-system-x86_64
@@ -237,6 +238,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 		exit 1
 	    fi
 	fi
+	netbootext=efi
 	;;
     arm64-efi)
 	qemu=qemu-system-aarch64
@@ -270,6 +272,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	qemuopts="-machine virt -cpu cortex-a57 $qemuopts"
 	disk="device virtio-blk-device,drive=hd1 -drive if=none,id=hd1,file="
 	serial_port=
+	netbootext=efi
 	;;
      arm-efi)
 	qemu=qemu-system-arm
@@ -303,6 +306,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	qemuopts="-machine virt $qemuopts"
 	disk="device virtio-blk-device,drive=hd1 -drive if=none,id=hd1,file="
 	serial_port=efi0
+	netbootext=efi
 	;;
     loongarch64-efi)
 	qemu=qemu-system-loongarch64
