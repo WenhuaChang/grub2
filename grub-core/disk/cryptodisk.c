@@ -34,7 +34,7 @@
 #ifdef GRUB_UTIL
 #include <grub/emu/hostdisk.h>
 #else
-#include <grub/linux.h>
+#include <grub/crypttab.h>
 #endif
 
 GRUB_MOD_LICENSE ("GPLv3+");
