@@ -1215,6 +1215,12 @@ grub_cryptodisk_scan_device_real (const char *name,
     }
   else
     {
+      if (grub_errno)
+	{
+	  grub_print_error ();
+	  grub_errno = GRUB_ERR_NONE;
+	}
+
       /* Get the passphrase from the user, if no key data. */
       unsigned long tries = 3;
       const char *tries_env;
