@@ -33,6 +33,7 @@
 #include <grub/gfxterm.h>
 #include <grub/dl.h>
 #include <grub/safemath.h>
+#include <grub/crypttab.h>
 #ifdef GRUB_MACHINE_IEEE1275
 #include <grub/ieee1275/ieee1275.h>
 #endif
@@ -770,6 +771,7 @@ run_menu (grub_menu_t menu, int nested, int *auto_boot, int *notify_boot)
 	  if (grub_key_is_interrupt (key))
 	    {
 	      timeout = -1;
+	      grub_cryptokey_tpmkey_discard();
 	      break;
 	    }
 
@@ -851,6 +853,11 @@ run_menu (grub_menu_t menu, int nested, int *auto_boot, int *notify_boot)
 	      grub_env_unset ("fallback");
 	      clear_timeout ();
 	    }
+
+	  /* Timeout is interrupted by external input, Forget tpmkey if timeout
+	   * is not cut by enter */
+	  if (c != '\n' && c != '\r')
+	      grub_cryptokey_tpmkey_discard();
 
 	  switch (c)
 	    {
