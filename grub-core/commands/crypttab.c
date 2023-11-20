@@ -6,10 +6,46 @@
 #include <grub/mm.h>
 #include <grub/list.h>
 #include <grub/crypttab.h>
+#include <grub/file.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
 grub_crypto_key_list_t *cryptokey_lst;
+
+static int
+is_unencrypted_disk (grub_disk_t disk)
+{
+  grub_command_t cmd;
+  char *disk_str;
+  int disk_str_len;
+  int res;
+
+  if (disk->dev->id == GRUB_DISK_DEVICE_CRYPTODISK_ID)
+    return 0; /* This is (crypto*) disk */
+
+  if (disk->dev->id == GRUB_DISK_DEVICE_DISKFILTER_ID)
+    {
+      char opt[] = "--quiet";
+      char *args[2];
+
+      cmd = grub_command_find ("cryptocheck");
+      if (!cmd) /* No diskfilter module loaded for some reason */
+        return 1;
+
+      disk_str_len = grub_strlen (disk->name) + 2 + 1;
+      disk_str = grub_malloc (disk_str_len);
+      if (!disk_str) /* Something is wrong, better report as unencrypted */
+        return 1;
+
+      grub_snprintf (disk_str, disk_str_len, "(%s)", disk->name);
+      args[0] = opt;
+      args[1] = disk_str;
+      res = cmd->func (cmd, 2, args);
+      grub_free (disk_str);
+      return (res != GRUB_ERR_NONE); /* GRUB_ERR_NONE for encrypted */
+    }
+  return 1;
+}
 
 grub_err_t
 grub_cryptokey_add_or_update (const char *uuid, const char *key, grub_size_t key_len, const char *path, int is_tpmkey)
@@ -89,6 +125,44 @@ grub_cryptokey_tpmkey_discard (void)
     grub_cryptokey_discard();
 }
 
+static grub_file_t
+grub_distrust_open (grub_file_t io,
+		enum grub_file_type type __attribute__ ((unused)))
+{
+  grub_disk_t disk = io->device->disk;
+
+  if (io->device->disk &&
+      (io->device->disk->dev->id == GRUB_DISK_DEVICE_MEMDISK_ID
+       || io->device->disk->dev->id == GRUB_DISK_DEVICE_PROCFS_ID))
+    return io;
+
+  /* Ensure second stage files is in a protected location or grub won't hand
+   * over the key and discards it */
+  switch (type & GRUB_FILE_TYPE_MASK)
+    {
+      case GRUB_FILE_TYPE_ACPI_TABLE:
+      case GRUB_FILE_TYPE_CONFIG:
+      case GRUB_FILE_TYPE_DEVICE_TREE_IMAGE:
+      case GRUB_FILE_TYPE_FONT:
+      case GRUB_FILE_TYPE_GRUB_MODULE:
+      case GRUB_FILE_TYPE_GRUB_MODULE_LIST:
+      case GRUB_FILE_TYPE_LINUX_KERNEL:
+      case GRUB_FILE_TYPE_LINUX_INITRD:
+      case GRUB_FILE_TYPE_LOADENV:
+      case GRUB_FILE_TYPE_THEME:
+	if (!disk || is_unencrypted_disk (disk))
+	  {
+	    grub_cryptokey_discard ();
+	    grub_errno = GRUB_ERR_NONE;
+	  }
+	break;
+      default:
+	break;
+    }
+
+  return io;
+}
+
 static grub_err_t
 grub_cmd_crypttab_entry (grub_command_t cmd __attribute__ ((unused)),
 	       int argc, char **argv)
@@ -121,6 +195,8 @@ GRUB_MOD_INIT(crypttab)
 {
   cmd = grub_register_command ("crypttab_entry", grub_cmd_crypttab_entry,
 			       N_("VOLUME-NAME ENCRYPTED-DEVICE KEY-FILE") , N_("No description"));
+  grub_file_filter_register (GRUB_FILE_FILTER_DISTRUST, grub_distrust_open);
+  grub_dl_set_persistent (mod);
 }
 
 GRUB_MOD_FINI(crypttab)
