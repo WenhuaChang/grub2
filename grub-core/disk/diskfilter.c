@@ -587,6 +587,7 @@ grub_diskfilter_open (const char *name, grub_disk_t disk)
 
   disk->total_sectors = lv->size;
   disk->max_agglomerate = GRUB_DISK_MAX_MAX_AGGLOMERATE;
+
   return 0;
 }
 
