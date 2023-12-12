@@ -26,6 +26,7 @@
 #include <grub/time.h>
 #include <grub/safemath.h>
 #include <grub/env.h>
+#include <grub/command.h>
 
 #define RETRY_DEFAULT_TIMEOUT 15
 
@@ -60,6 +61,9 @@ grub_ofdisk_get_block_size (grub_uint32_t *block_size,
 
 #define OFDISK_HASH_SZ	8
 static struct ofdisk_hash_ent *ofdisk_hash[OFDISK_HASH_SZ];
+
+static void early_log (const char *fmt, ...);
+static void print_early_log (void);
 
 static int
 ofdisk_hash_fn (const char *devpath)
@@ -1167,10 +1171,10 @@ get_boot_device_parent (const char *bootpath, int *is_nvmeof)
       return NULL;
     }
   else
-    grub_dprintf ("ofdisk", "%s is canonical %s\n", bootpath, canon);
+    early_log ("%s is canonical %s\n", bootpath, canon);
 
   parent = get_parent_devname (canon, is_nvmeof);
-  grub_dprintf ("ofdisk", "%s is parent of %s\n", parent, canon);
+  early_log ("%s is parent of %s\n", parent, canon);
 
   grub_free (canon);
   return parent;
@@ -1221,9 +1225,9 @@ insert_bootpath (void)
       boot_parent = get_boot_device_parent (bootpath, &is_boot_nvmeof);
       boot_type =  grub_ieee1275_get_device_type (boot_parent);
       if (boot_type)
-	grub_dprintf ("ofdisk", "the boot device type %s is used for root device discovery, others excluded\n", boot_type);
+	early_log ("the boot device type %s is used for root device discovery, others excluded\n", boot_type);
       else
-	grub_dprintf ("ofdisk", "unknown boot device type, will use all devices to discover root and may be slow\n");
+	early_log ("unknown boot device type, will use all devices to discover root and may be slow\n");
     }
   grub_free (type);
   grub_free (bootpath);
@@ -1247,7 +1251,7 @@ grub_env_get_boot_type (struct grub_env_var *var __attribute__ ((unused)),
   static char *ret;
 
   if (!ret)
-    ret = grub_xasprintf("boot: %s type: %s is_nvmeof: %d",
+    ret = grub_xasprintf("boot: %s type: %s is_nvmeof? %d",
 	      boot_parent,
 	      boot_type ? : "unknown",
 	      is_boot_nvmeof);
@@ -1263,6 +1267,17 @@ grub_env_set_boot_type (struct grub_env_var *var __attribute__ ((unused)),
   return NULL;
 }
 
+static grub_err_t
+grub_cmd_early_msg (struct grub_command *cmd __attribute__ ((unused)),
+		   int argc __attribute__ ((unused)),
+		   char *argv[] __attribute__ ((unused)))
+{
+  print_early_log ();
+  return 0;
+}
+
+static grub_command_t cmd_early_msg;
+
 void
 grub_ofdisk_init (void)
 {
@@ -1272,6 +1287,9 @@ grub_ofdisk_init (void)
   grub_register_variable_hook ("ofdisk_boot_type", grub_env_get_boot_type,
                                grub_env_set_boot_type );
 
+  cmd_early_msg =
+    grub_register_command ("ofdisk_early_msg", grub_cmd_early_msg,
+			   0, N_("Show early boot message in ofdisk."));
   grub_disk_dev_register (&grub_ofdisk_dev);
 }
 
@@ -1319,4 +1337,51 @@ grub_ofdisk_get_block_size (grub_uint32_t *block_size,
     }
 
   return 0;
+}
+
+struct ofdisk_early_msg
+{
+  struct ofdisk_early_msg *next;
+  char *msg;
+};
+
+static struct ofdisk_early_msg *early_msg_head;
+static struct ofdisk_early_msg **early_msg_last = &early_msg_head;
+
+static void
+early_log (const char *fmt, ...)
+{
+  struct ofdisk_early_msg *n;
+  va_list args;
+
+  grub_error_push ();
+  n = grub_malloc (sizeof (*n));
+  if (!n)
+    {
+      grub_errno = 0;
+      grub_error_pop ();
+      return;
+    }
+  n->next = 0;
+
+  va_start (args, fmt);
+  n->msg = grub_xvasprintf (fmt, args);
+  va_end (args);
+
+  *early_msg_last = n;
+  early_msg_last = &n->next;
+
+  grub_errno = 0;
+  grub_error_pop ();
+}
+
+static void
+print_early_log (void)
+{
+  struct ofdisk_early_msg *cur;
+
+  if (!early_msg_head)
+    grub_printf ("no early log is available\n");
+  for (cur = early_msg_head; cur; cur = cur->next)
+    grub_printf ("%s\n", cur->msg);
 }
