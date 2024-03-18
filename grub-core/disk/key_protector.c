@@ -25,6 +25,10 @@
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
+#ifdef GRUB_MACHINE_EFI
+#include <grub/efi/efi.h>
+#endif
+
 struct grub_key_protector *grub_key_protectors = NULL;
 
 grub_err_t
@@ -53,11 +57,34 @@ grub_key_protector_unregister (struct grub_key_protector *protector)
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+grub_key_protector_check_blocklist (void)
+{
+#ifdef GRUB_MACHINE_EFI
+  static grub_guid_t systemd_guid = GRUB_EFI_SYSTEMD_GUID;
+  grub_efi_status_t status;
+  grub_size_t size = 0;
+  grub_uint8_t *systemdoptions = NULL;
+
+  /* SystemdOptions may contain malicious kernel command lines. */
+  status = grub_efi_get_variable ("SystemdOptions", &systemd_guid,
+				  &size, (void **) &systemdoptions);
+  if (status != GRUB_EFI_NOT_FOUND)
+  {
+    grub_free (systemdoptions);
+    return grub_error (GRUB_ERR_ACCESS_DENIED, N_("SystemdOptions detected"));
+  }
+#endif
+
+  return GRUB_ERR_NONE;
+}
+
 grub_err_t
 grub_key_protector_recover_key (const char *protector, grub_uint8_t **key,
 				grub_size_t *key_size)
 {
   struct grub_key_protector *kp = NULL;
+  grub_err_t err;
 
   if (grub_key_protectors == NULL)
     return grub_error (GRUB_ERR_OUT_OF_RANGE, "No key protector registered");
@@ -68,6 +95,10 @@ grub_key_protector_recover_key (const char *protector, grub_uint8_t **key,
   kp = grub_named_list_find (GRUB_AS_NAMED_LIST (grub_key_protectors), protector);
   if (kp == NULL)
     return grub_error (GRUB_ERR_OUT_OF_RANGE, "Key protector '%s' not found", protector);
+
+  err = grub_key_protector_check_blocklist ();
+  if (err != GRUB_ERR_NONE)
+    return err;
 
   return kp->recover_key (key, key_size);
 }
