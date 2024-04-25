@@ -138,8 +138,8 @@ static const struct grub_arg_option tpm2_protector_init_cmd_options[] =
       .arg      = NULL,
       .type     = ARG_TYPE_STRING,
       .doc      =
-	N_("In SRK mode, the type of SRK: RSA (RSA2048) and ECC (ECC_NIST_P256)"
-	   "(default: ECC)"),
+	N_("In SRK mode, the type of SRK: RSA (RSA2048), RSA3072, RSA4096, "
+	  "and ECC (ECC_NIST_P256). (default: ECC)"),
     },
     /* NV Index-mode options */
     {
@@ -517,6 +517,10 @@ srk_type_to_name (grub_srk_type_t srk_type)
     return "ECC_NIST_P256";
   else if (srk_type.type == TPM_ALG_RSA && srk_type.detail.rsa_bits == 2048)
     return "RSA2048";
+  else if (srk_type.type == TPM_ALG_RSA && srk_type.detail.rsa_bits == 3072)
+    return "RSA3072";
+  else if (srk_type.type == TPM_ALG_RSA && srk_type.detail.rsa_bits == 4096)
+    return "RSA4096";
 
   return "Unknown";
 }
@@ -534,6 +538,14 @@ tpm2_protector_load_key (const tpm2_protector_context_t *ctx,
     {
       .type = TPM_ALG_ECC,
       .detail.ecc_curve = TPM_ECC_NIST_P256,
+    },
+    {
+      .type = TPM_ALG_RSA,
+      .detail.rsa_bits = 4096,
+    },
+    {
+      .type = TPM_ALG_RSA,
+      .detail.rsa_bits = 3072,
     },
     {
       .type = TPM_ALG_RSA,
@@ -882,7 +894,7 @@ tpm2_protector_srk_recover (const tpm2_protector_context_t *ctx,
       if (err != GRUB_ERR_NONE)
 	goto exit1;
 
-      if (rsaparent == 1)
+      if (rsaparent == 1 && ctx->srk_type.type != TPM_ALG_RSA)
 	{
 	  tpm2_protector_context_t *ctx_w;
 
