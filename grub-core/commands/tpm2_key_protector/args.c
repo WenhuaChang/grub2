@@ -85,6 +85,16 @@ grub_tpm2_protector_parse_asymmetric (const char *value,
       srk_type->type = TPM_ALG_RSA;
       srk_type->detail.rsa_bits = 2048;
     }
+  else if (grub_strcasecmp (value, "RSA3072") == 0)
+    {
+      srk_type->type = TPM_ALG_RSA;
+      srk_type->detail.rsa_bits = 3072;
+    }
+  else if (grub_strcasecmp (value, "RSA4096") == 0)
+    {
+      srk_type->type = TPM_ALG_RSA;
+      srk_type->detail.rsa_bits = 4096;
+    }
   else
     return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("value '%s' is not a valid asymmetric key type"), value);
 

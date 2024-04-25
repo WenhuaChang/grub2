@@ -205,8 +205,8 @@ static struct argp_option protect_options[] =
       .arg   = "TYPE",
       .flags = 0,
       .doc   =
-	N_("Set the type of SRK: RSA (RSA2048) and ECC (ECC_NIST_P256)."
-	   "(default: ECC)"),
+	N_("Set the type of SRK: RSA (RSA2048),  RSA3072, RSA4096, "
+	   "and ECC (ECC_NIST_P256). (default: ECC)"),
       .group = 0
     },
     {
