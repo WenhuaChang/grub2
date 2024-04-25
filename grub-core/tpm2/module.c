@@ -136,8 +136,8 @@ static const struct grub_arg_option grub_tpm2_protector_init_cmd_options[] =
       .arg      = NULL,
       .type     = ARG_TYPE_STRING,
       .doc      =
-	N_("In SRK mode, the type of SRK: RSA (RSA2048) and ECC (ECC_NIST_P256)"
-	   "(default: ECC)"),
+	N_("In SRK mode, the type of SRK: RSA (RSA2048), RSA3072, RSA4096, "
+	  "and ECC (ECC_NIST_P256). (default: ECC)"),
     },
     /* NV Index-mode options */
     {
@@ -541,6 +541,10 @@ srk_type_to_name (grub_srk_type_t srk_type)
 	{
 	  case 2048:
 	    return "RSA2048";
+	  case 3072:
+	    return "RSA3072";
+	  case 4096:
+	    return "RSA4096";
 	}
    }
 
@@ -560,6 +564,14 @@ grub_tpm2_protector_load_key (const struct grub_tpm2_protector_context *ctx,
     {
       .type = TPM_ALG_ECC,
       .detail.ecc_curve = TPM_ECC_NIST_P256,
+    },
+    {
+      .type = TPM_ALG_RSA,
+      .detail.rsa_bits = 4096,
+    },
+    {
+      .type = TPM_ALG_RSA,
+      .detail.rsa_bits = 3072,
     },
     {
       .type = TPM_ALG_RSA,
