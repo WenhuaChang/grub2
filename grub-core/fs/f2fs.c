@@ -1350,6 +1350,7 @@ static struct grub_fs grub_f2fs_fs = {
 
 GRUB_MOD_INIT (f2fs)
 {
+  grub_f2fs_fs.mod = mod;
   grub_fs_register (&grub_f2fs_fs);
   my_mod = mod;
 }

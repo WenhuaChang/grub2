@@ -3565,6 +3565,7 @@ relpath_set_env (struct grub_env_var *var,
 
 GRUB_MOD_INIT (btrfs)
 {
+  grub_btrfs_fs.mod = mod;
   grub_fs_register (&grub_btrfs_fs);
   cmd_info = grub_register_command("btrfs-info", grub_cmd_btrfs_info,
 				   "DEVICE",
