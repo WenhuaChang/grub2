@@ -210,6 +210,7 @@ program = {
 program = {
   name = grub-protect;
   mansection = 1;
+  enable = efi;
 
   common = grub-core/kern/emu/argp_common.c;
   common = grub-core/osdep/init.c;
