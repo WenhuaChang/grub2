@@ -2748,3 +2748,10 @@ module = {
   enable = emu;
   enable = efi;
 };
+
+module = {
+  name = utoken_efiusb;
+  common = lib/utoken/efiusb.c;
+  enable = efi;
+};
+
