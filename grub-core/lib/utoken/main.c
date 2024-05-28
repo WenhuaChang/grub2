@@ -272,7 +272,9 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
 	if (!buffer_write_file(opt_output, cleartext))
 		return 1;
 #else
-	infomsg("<stdout> %s\n", cleartext);
+	infomsg("Writing data to \"<stdout>\"\n");
+	buffer_print(cleartext);
+	infomsg("\n");
 #endif
 
 	buffer_free(cleartext);

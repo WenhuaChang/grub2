@@ -61,6 +61,27 @@ buffer_read_file(const char *filename, int flags __attribute__ ((unused)))
   return bp;
 }
 
+bool
+buffer_print(buffer_t *bp)
+{
+  int n;
+  char output[512];
+  char *pout = output;
+  int sz = sizeof(output)/sizeof(char) - 1;
+
+  while (sz && (n = buffer_available(bp)) != 0) {
+    grub_memcpy(pout, buffer_read_pointer(bp), n);
+    buffer_skip(bp, n);
+    sz -= n;
+    pout += n;
+  }
+
+  *pout = '\0';
+  grub_printf("%s", output);
+
+  return true;
+}
+
 #if 0
 bool
 buffer_write_file(const char *filename, buffer_t *bp)

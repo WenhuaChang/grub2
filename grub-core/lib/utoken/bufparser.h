@@ -354,8 +354,6 @@ buffer_truncate(buffer_t *bp, size_t len)
 }
 
 buffer_t *		buffer_read_file(const char *filename, int flags);
-#if 0
-bool			EXPORT_FUNC(buffer_write_file)(const char *filename, buffer_t *bp);
-#endif
+bool			buffer_print(buffer_t *bp);
 
 #endif /* BUFPARSER_H */

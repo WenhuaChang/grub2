@@ -2745,7 +2745,6 @@ module = {
   efi = commands/utoken_decrypt.c;
   cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
   cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
-  enable = emu;
   enable = efi;
 };
 
