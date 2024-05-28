@@ -23,9 +23,10 @@
 #define CCID_H
 
 #include <stdbool.h>
+#include "grub/symbol.h"
 #include "uusb.h"
 
-extern bool		ccid_parse_usb_descriptor(ccid_descriptor_t *, const unsigned char *data, unsigned int len);
+extern bool		EXPORT_FUNC(ccid_parse_usb_descriptor)(ccid_descriptor_t *, const unsigned char *data, unsigned int len);
 
 #endif /* CCID_H */
 

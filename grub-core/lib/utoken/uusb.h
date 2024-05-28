@@ -52,7 +52,7 @@ bool		EXPORT_FUNC(usb_parse_type)(const char *string, uusb_type_t *type);
 uusb_dev_t *	EXPORT_FUNC(usb_open_type)(const uusb_type_t *);
 /* Alternative idea: find device(s) that have a CCID descriptor */
 
-bool	        EXPORT_FUNC(uusb_parse_descriptors)(uusb_dev_t *dev, const unsigned char *data, size_t len);
+extern bool	        (*EXPORT_VAR(uusb_parse_descriptors_callback))(uusb_dev_t *dev, const unsigned char *data, size_t len);
 bool		EXPORT_FUNC(uusb_dev_select_ccid_interface)(uusb_dev_t *, const struct ccid_descriptor **);
 bool		EXPORT_FUNC(uusb_send)(uusb_dev_t *, buffer_t *);
 buffer_t *	EXPORT_FUNC(uusb_recv)(uusb_dev_t *, size_t maxlen, long timeout);

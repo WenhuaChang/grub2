@@ -18,13 +18,11 @@
  * Written by Olaf Kirch <okir@suse.com>
  */
 
-#include <config-util.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-#include <errno.h>
-
+#include <grub/file.h>
 #include "bufparser.h"
 
 /* This should be moved to bufparser.h */
@@ -33,46 +31,37 @@
 buffer_t *
 buffer_read_file(const char *filename, int flags __attribute__ ((unused)))
 {
-	const char *display_name = filename;
-	bool closeit = true;
-	buffer_t *bp;
-	struct stat stb;
-	int count;
-	int fd;
+  grub_file_t file = NULL;
+  buffer_t *bp;
+  grub_ssize_t count;
 
-	if (filename == NULL || !strcmp(filename, "-")) {
-		display_name = "<stdin>";
-		closeit = false;
-		fd = 0;
-	} else
-	if ((fd = open(filename, O_RDONLY)) < 0) {
-		fatal("Unable to open file %s: %m\n", filename);
-	}
+  if (!filename)
+    fatal("No filename specified\n");
 
-	if (fstat(fd, &stb) < 0)
-		fatal("Cannot stat %s: %m\n", display_name);
+  file = grub_file_open(filename, GRUB_FILE_TYPE_SIGNATURE);
+  if (!file)
+    fatal("Unable to open file %s\n", filename);
 
-	bp = buffer_alloc_write(stb.st_size);
-	if (bp == NULL)
-		fatal("Cannot allocate buffer of %lu bytes for %s: %m\n",
-				(unsigned long) stb.st_size,
-				display_name);
+  bp = buffer_alloc_write(file->size);
+  if (bp == NULL)
+    fatal("Cannot allocate buffer of %" PRIuGRUB_OFFSET " bytes for %s\n",
+          file->size, filename);
 
-	count = read(fd, bp->data, stb.st_size);
-	if (count < 0)
-		fatal("Error while reading from %s: %m\n", display_name);
+  count = grub_file_read(file, bp->data, file->size);
+  if (count < 0)
+    fatal("Error while reading from %s\n", filename);
 
-	if (count != stb.st_size)
-		fatal("Short read from %s\n", display_name);
+  if (count != file->size)
+    fatal("Short read from %s\n", filename);
 
-	if (closeit)
-		close(fd);
+  grub_file_close(file);
 
-	debug("Read %u bytes from %s\n", count, display_name);
-	bp->wpos = count;
-	return bp;
+  debug("Read %" PRIdGRUB_SSIZE " bytes from %s\n", count, filename);
+  bp->wpos = count;
+  return bp;
 }
 
+#if 0
 bool
 buffer_write_file(const char *filename, buffer_t *bp)
 {
@@ -105,3 +94,4 @@ buffer_write_file(const char *filename, buffer_t *bp)
 	debug("Wrote %u bytes to %s\n", written, display_name);
 	return true;
 }
+#endif

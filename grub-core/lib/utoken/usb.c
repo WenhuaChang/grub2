@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include "uusb.h"
 #include "uusb_impl.h"
 #include "uusb_const.h" /* maybe we should move the logic in uusb_set_endpoints to descriptors.c */
 #include "bufparser.h"
@@ -206,6 +207,8 @@ usb_match_type(const char *sysfs_dir, const void *data)
 	return true;
 }
 
+bool (*uusb_parse_descriptors_callback)(uusb_dev_t *dev, const unsigned char *data, size_t len) = NULL;
+
 static bool
 __uusb_process_descriptors(uusb_dev_t *dev)
 {
@@ -213,10 +216,13 @@ __uusb_process_descriptors(uusb_dev_t *dev)
 	size_t len;
 	bool rv;
 
+	if (!uusb_parse_descriptors_callback)
+		return false;
+
 	if (!(data = sysfs_read_buffer(dev->sysfs_dir, "descriptors", &len)))
 		return false;
 
-	rv = uusb_parse_descriptors(dev, data, len);
+	rv = uusb_parse_descriptors_callback(dev, data, len);
 	free(data);
 	return rv;
 }

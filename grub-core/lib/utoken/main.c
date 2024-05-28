@@ -26,15 +26,20 @@
 #include <grub/dl.h>
 #include <grub/extcmd.h>
 #endif
+#include "uusb_impl.h"
+#if 0
 #include "uusb.h"
+#endif
 #include "scard.h"
 
+#if 0
 #define le16toh(x) grub_le_to_cpu16(x)
 #define le32toh(x) grub_le_to_cpu32(x)
 #define le64toh(x) grub_le_to_cpu64(x)
 #define htole16(x) grub_cpu_to_le16(x)
 #define htole32(x) grub_cpu_to_le32(x)
 #define htole64(x) grub_cpu_to_le64(x)
+#endif
 #include "bufparser.h"
 #include "util.h"
 
@@ -262,9 +267,13 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
 		return GRUB_ERR_BUG;
 #endif
 
+#if 0
 	infomsg("Writing data to \"%s\"\n", opt_output?: "<stdout>");
 	if (!buffer_write_file(opt_output, cleartext))
 		return 1;
+#else
+	infomsg("<stdout> %s\n", cleartext);
+#endif
 
 	buffer_free(cleartext);
 #if 0
@@ -326,8 +335,9 @@ doit(uusb_dev_t *dev, const char *pin, buffer_t *ciphertext, unsigned int ncardo
 
 static grub_extcmd_t cmd;
 
-GRUB_MOD_INIT(utoken_decrypt)
+GRUB_MOD_INIT(utoken)
 {
+  uusb_parse_descriptors_callback = uusb_parse_descriptors;
   cmd = grub_register_extcmd ("utoken_decrypt",
 	grub_utoken_decrypt, 0,
 	N_("[-D device] "
@@ -340,7 +350,7 @@ GRUB_MOD_INIT(utoken_decrypt)
 	grub_utoken_decrypt_options);
 }
 
-GRUB_MOD_FINI(utoken_decrypt)
+GRUB_MOD_FINI(utoken)
 {
   grub_unregister_extcmd (cmd);
 }

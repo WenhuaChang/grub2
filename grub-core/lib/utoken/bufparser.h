@@ -26,14 +26,24 @@
 #include <string.h>
 #include "util.h"
 
-#if 0
 #include <grub/types.h>
 
+#if !defined(le16toh)
 #define le16toh(x) grub_le_to_cpu16(x)
+#endif
+#if !defined(le32toh)
 #define le32toh(x) grub_le_to_cpu32(x)
+#endif
+#if !defined(le64toh)
 #define le64toh(x) grub_le_to_cpu64(x)
+#endif
+#if !defined(htole16)
 #define htole16(x) grub_cpu_to_le16(x)
+#endif
+#if !defined(htole32)
 #define htole32(x) grub_cpu_to_le32(x)
+#endif
+#if !defined(htole64)
 #define htole64(x) grub_cpu_to_le64(x)
 #endif
 
@@ -343,7 +353,9 @@ buffer_truncate(buffer_t *bp, size_t len)
 	return true;
 }
 
-buffer_t *		EXPORT_FUNC(buffer_read_file)(const char *filename, int flags);
+buffer_t *		buffer_read_file(const char *filename, int flags);
+#if 0
 bool			EXPORT_FUNC(buffer_write_file)(const char *filename, buffer_t *bp);
+#endif
 
 #endif /* BUFPARSER_H */

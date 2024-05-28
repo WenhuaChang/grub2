@@ -23,12 +23,15 @@
 
 #include <grub/types.h>
 
+#if 0
 #define le16toh(x) grub_le_to_cpu16(x)
 #define le32toh(x) grub_le_to_cpu32(x)
 #define le64toh(x) grub_le_to_cpu64(x)
 #define htole16(x) grub_cpu_to_le16(x)
 #define htole32(x) grub_cpu_to_le32(x)
 #define htole64(x) grub_cpu_to_le64(x)
+#endif
+
 #include "bufparser.h"
 
 #include "util.h"
