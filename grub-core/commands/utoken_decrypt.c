@@ -141,7 +141,7 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
 
 static grub_extcmd_t cmd;
 
-GRUB_MOD_INIT(utoken_decrypt)
+GRUB_MOD_INIT(utoken)
 {
   cmd = grub_register_extcmd ("utoken_decrypt",
 	grub_utoken_decrypt, 0,
@@ -155,7 +155,7 @@ GRUB_MOD_INIT(utoken_decrypt)
 	grub_utoken_decrypt_options);
 }
 
-GRUB_MOD_FINI(utoken_decrypt)
+GRUB_MOD_FINI(utoken)
 {
   grub_unregister_extcmd (cmd);
 }

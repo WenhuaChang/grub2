@@ -18,9 +18,7 @@
  * Written by Olaf Kirch <okir@suse.com>
  */
 
-#include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <string.h>
 #include <grub/file.h>
 #include "bufparser.h"
