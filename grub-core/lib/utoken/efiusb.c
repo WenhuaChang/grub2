@@ -1,4 +1,5 @@
 #include "grub/usb.h"
+#include "grub/usbtrans.h"
 #include <stdbool.h>
 #include <grub/dl.h>
 #include <grub/extcmd.h>
@@ -11,6 +12,35 @@ GRUB_MOD_LICENSE ("GPLv3+");
   { 0x2B2F68D6, 0x0CD2, 0x44cf, \
     {0x8E, 0x8B, 0xBB, 0xA2, 0x0B, 0x1B, 0x5B, 0x75 } \
   }
+
+typedef enum {
+  grub_efi_usb_data_in,
+  grub_efi_usb_data_out,
+  grub_efi_usb_no_data
+} grub_efi_usb_data_direction_t;
+
+/* USB Transfer Results */
+#define GRUB_EFI_USB_NOERROR         0x00
+#define GRUB_EFI_USB_ERR_NOTEXECUTE  0x01
+#define GRUB_EFI_USB_ERR_STALL       0x02
+#define GRUB_EFI_USB_ERR_BUFFER      0x04
+#define GRUB_EFI_USB_ERR_BABBLE      0x08
+#define GRUB_EFI_USB_ERR_NAK         0x10
+#define GRUB_EFI_USB_ERR_CRC         0x20
+#define GRUB_EFI_USB_ERR_TIMEOUT     0x40
+#define GRUB_EFI_USB_ERR_BITSTUFF    0x80
+#define GRUB_EFI_USB_ERR_SYSTEM      0x100
+
+struct grub_efi_usb_device_request {
+  grub_efi_uint8_t     request_type;
+  grub_efi_uint8_t     request;
+  grub_efi_uint16_t    value;
+  grub_efi_uint16_t    index;
+  grub_efi_uint16_t    length;
+} GRUB_PACKED;
+
+typedef struct grub_efi_usb_device_request grub_efi_usb_device_request_t;
+
 struct grub_efi_usb_device_descriptor {
   grub_efi_uint8_t    length;
   grub_efi_uint8_t    descriptor_type;
@@ -68,6 +98,33 @@ struct grub_efi_usb_endpoint_descriptor {
 
 typedef struct grub_efi_usb_endpoint_descriptor grub_efi_usb_endpoint_descriptor_t; 
 
+struct grub_efi_usb_ccid_descriptor {
+  grub_efi_uint8_t    length;
+  grub_efi_uint8_t    descriptor_type;
+  grub_efi_uint16_t   bcdccid;
+  grub_efi_uint8_t    max_slot_index;
+  grub_efi_uint8_t    voltage_support;
+  grub_efi_uint32_t   protocols;
+  grub_efi_uint32_t   default_clock;
+  grub_efi_uint32_t   maximum_clock;
+  grub_efi_uint8_t    num_clock_rates_supported;
+  grub_efi_uint32_t   data_rate;
+  grub_efi_uint32_t   max_data_rate;
+  grub_efi_uint8_t    num_data_rates_supported;
+  grub_efi_uint32_t   max_ifsd;
+  grub_efi_uint32_t   synch_protocols;
+  grub_efi_uint32_t   mechanical;
+  grub_efi_uint32_t   features;
+  grub_efi_uint32_t   max_ccid_message_length;
+  grub_efi_uint8_t    class_get_response;
+  grub_efi_uint8_t    class_envelope;
+  grub_efi_uint16_t   lcd_layout;
+  grub_efi_uint8_t    pin_support;
+  grub_efi_uint8_t    max_ccid_busy_slots;
+} GRUB_PACKED;
+
+typedef struct grub_efi_usb_ccid_descriptor grub_efi_usb_ccid_descriptor_t; 
+
 struct grub_efi_usb_string_descriptor {
   grub_efi_uint8_t    length;
   grub_efi_uint8_t    descriptor_type;
@@ -77,7 +134,15 @@ struct grub_efi_usb_string_descriptor {
 typedef struct grub_efi_usb_string_descriptor grub_efi_usb_string_descriptor_t; 
 
 struct grub_efi_usb_io {
-  void (__grub_efi_api *control_transfer)(void);
+  grub_efi_status_t (__grub_efi_api *control_transfer) (
+      struct grub_efi_usb_io *this,
+      grub_efi_usb_device_request_t *request,
+      grub_efi_usb_data_direction_t direction,
+      grub_efi_uint32_t timeout,
+      void *data,
+      grub_efi_uintn_t data_length,
+      grub_efi_uint32_t *status);
+
   void (__grub_efi_api *bulk_transfer)(void);
   void (__grub_efi_api *async_interrupt_transfer)(void);
   void (__grub_efi_api *sync_interrupt_transfer)(void);
@@ -180,6 +245,90 @@ typedef struct grub_efi_usb_io grub_efi_usb_io_t;
 
 static grub_guid_t usb_io_guid = GRUB_EFI_USB_IO_GUID;
 
+struct grub_usb_desc_head {
+  grub_efi_uint8_t len;
+  grub_efi_uint8_t type;
+} GRUB_PACKED;
+
+typedef struct grub_usb_desc_head grub_usb_desc_head_t;
+
+static void
+get_ccid_descriptor (grub_efi_usb_io_t *usbio)
+{
+  grub_efi_usb_config_descriptor_t conf_desc;
+  grub_efi_status_t status;
+
+  status = usbio->get_config_descriptor (usbio, &conf_desc);
+  if (status == GRUB_EFI_SUCCESS)
+    {
+      char *buf;
+      grub_efi_usb_device_request_t  req = { 0 };
+      grub_efi_uint32_t ret;
+
+      grub_printf ("conf totoal length: %u\n", conf_desc.total_length);
+
+      buf = grub_zalloc (conf_desc.total_length);
+
+#define USB_DEV_GET_DESCRIPTOR_REQ_TYPE  0x80
+
+      req.request_type = USB_DEV_GET_DESCRIPTOR_REQ_TYPE;
+      req.request = USB_REQ_GET_DESCRIPTOR;
+      req.value = (grub_efi_uint16_t)((USB_DESC_TYPE_CONFIG << 8) | (conf_desc.configuration_value - 1));
+      req.index = 0;
+      req.length = conf_desc.total_length;
+
+      status = usbio->control_transfer (
+	      usbio,
+	      &req,
+	      grub_efi_usb_data_in,
+	      3000,
+	      buf,
+	      conf_desc.total_length,
+	      &ret
+	      );
+
+      if (status == GRUB_EFI_SUCCESS)
+	{
+	  grub_efi_uint16_t total;
+	  grub_usb_desc_head_t *head;
+	  grub_efi_boolean_t ccid;
+
+	  total = 0;
+	  head = (grub_usb_desc_head_t *)buf;
+	  ccid = 0;
+
+	  while (total < conf_desc.total_length)
+	    {
+	      grub_printf ("type: 0x%02x\n", head->type);
+
+	      if (head->type == USB_DESC_TYPE_INTERFACE &&
+		  ((grub_efi_usb_interface_descriptor_t *)head)->interface_class == GRUB_USB_CLASS_SMART_CARD &&
+		  ((grub_efi_usb_interface_descriptor_t *)head)->interface_subclass == 0 &&
+		  ((grub_efi_usb_interface_descriptor_t *)head)->interface_protocol == 0)
+		{
+		  grub_printf ("found CCID interface\n");
+		  ccid = 1;
+		}
+	      else if (ccid == 1 && head->type == USB_DESC_TYPE_ENDPOINT)
+		{
+		  grub_printf ("no CCID descriptor follows the CCID interface\n");
+		  break;
+		}
+	      else if (ccid == 1 && head->type == 0x21)
+		{
+		  grub_printf ("found CCID descriptor\n");
+		  grub_printf ("length expected : %lu real : %u\n", sizeof (grub_efi_usb_ccid_descriptor_t), head->len);
+		  break;
+		}
+
+	      total += (grub_efi_uint16_t)head->len;
+	      head  = (grub_usb_desc_head_t *)((grub_efi_uint8_t *)buf + total);
+	    }
+	}
+      grub_free (buf);
+    }
+}
+
 static grub_err_t
 grub_cmd_efiusb_test (grub_command_t cmd __attribute__ ((unused)),
 		  int argc __attribute__ ((unused)),
@@ -215,16 +364,20 @@ grub_cmd_efiusb_test (grub_command_t cmd __attribute__ ((unused)),
       status = usbio->get_device_descriptor (usbio, &desc);
       if (status == GRUB_EFI_SUCCESS)
 	grub_printf ("id (vendor product) %04x %04x\n", desc.id_vendor, desc.id_product);
+      grub_printf ("num_configuration %u\n", desc.num_configurations);
+
       status = usbio->get_interface_descriptor (usbio, &interface_desc);
       if (status == GRUB_EFI_SUCCESS)
 	grub_printf ("interface (class subclass) %04x %04x\n", interface_desc.interface_class, interface_desc.interface_subclass);
       else
         grub_printf ("no interface");
 
+
       if (interface_desc.interface_class != GRUB_USB_CLASS_SMART_CARD)
 	continue;
 
       grub_printf ("ccid interface:\n");
+      get_ccid_descriptor (usbio);
 
       for (j = 0; j < interface_desc.num_endpoints; j++)
 	{
