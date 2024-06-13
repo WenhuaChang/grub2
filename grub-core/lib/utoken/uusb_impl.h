@@ -132,6 +132,9 @@ typedef struct uusb_dev {
 
 	unsigned int	num_configs;
 	uusb_config_t	config[UUSB_MAX_CONFIGS];
+#ifdef GRUB_MACHINE_EFI
+	void *dev;
+#endif
 } uusb_dev_t;
 
 extern bool		usb_parse_type(const char *string, uusb_type_t *type);

@@ -3,6 +3,8 @@
 #include <grub/extcmd.h>
 #include "uusb.h"
 #include "scard.h"
+#include "bufparser.h"
+#include "util.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -101,6 +103,8 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
   char *opt_output = NULL;
   char *cardopts[MAX_CARDOPTS];
   unsigned int ncardopts = 0;
+  buffer_t *secret;
+  uusb_dev_t *dev = NULL;
 
   struct grub_arg_list *state = ctxt->state;
 
@@ -136,6 +140,14 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
     }
 
   opt_input = args[0];
+  secret = buffer_read_file(opt_input, 0);
+  if (opt_type) {
+    uusb_type_t type;
+
+    if (!usb_parse_type(opt_type, &type))
+      return GRUB_ERR_BAD_ARGUMENT;
+    dev = usb_open_type(&type);
+  }
   return GRUB_ERR_NONE;
 }
 

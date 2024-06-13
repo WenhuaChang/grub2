@@ -2735,6 +2735,7 @@ module = {
   common = lib/utoken_wrap/wrap.c;
   emu = lib/utoken/main.c;
   efi = commands/utoken_decrypt.c;
+  efi = lib/utoken/efi_usb.c;
   cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
   cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
   enable = emu;
