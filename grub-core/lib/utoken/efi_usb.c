@@ -288,8 +288,25 @@ usb_parse_type(const char *string, uusb_type_t *type)
   return false;
 }
 
+static void
+process_device_descriptor (
+    grub_efi_usb_device_descriptor_t *desc,
+    uusb_device_descriptor_t *dd)
+{
+  dd->bDevice.class = desc->device_class;
+  dd->bDevice.subclass = desc->device_sub_class;
+  dd->bDevice.protocol = desc->device_protocol;
+  dd->bMaxPacketSize0 = desc->max_packet_size;
+  dd->idVendor = desc->id_vendor;
+  dd->idProduct = desc->id_product;
+  dd->bNumConfigurations = desc->num_configurations;
+  grub_printf ("In process_device_descriptor\n");
+}
+
+
 struct grub_efi_usb_ccid_dev {
   grub_efi_usb_io_t *usbio;
+  grub_efi_handle_t handle;
 };
 
 typedef struct grub_efi_usb_ccid_dev grub_efi_usb_ccid_dev_t;
@@ -300,6 +317,8 @@ usb_open_type(const uusb_type_t *type)
   grub_efi_uintn_t num_handles;
   grub_efi_handle_t *handles;
   unsigned i;
+  grub_efi_usb_device_descriptor_t desc;
+  grub_efi_usb_interface_descriptor_t interface_desc;
   grub_efi_usb_ccid_dev_t *dev;
   uusb_dev_t *ret = NULL;
   grub_efi_usb_io_t *usbio = NULL;
@@ -312,8 +331,6 @@ usb_open_type(const uusb_type_t *type)
   for (i = 0; i < num_handles; i++)
     {
       grub_efi_status_t status;
-      grub_efi_usb_device_descriptor_t desc;
-      grub_efi_usb_interface_descriptor_t interface_desc;
       grub_efi_handle_t handle = handles[i];
 
       usbio = grub_efi_open_protocol (handle, &usb_io_guid, GRUB_EFI_OPEN_PROTOCOL_GET_PROTOCOL);
@@ -338,7 +355,6 @@ usb_open_type(const uusb_type_t *type)
 	continue;
 
       ret = grub_malloc (sizeof (*ret));
-      grub_printf ("gotcha\n");
       break;
     }
 
@@ -350,7 +366,11 @@ usb_open_type(const uusb_type_t *type)
 	  grub_free (ret);
 	  return NULL;
 	}
+      ret->type.idProduct = desc.id_product;
+      ret->type.idVendor = desc.id_vendor;
+      process_device_descriptor (&desc, &ret->descriptor);
       dev->usbio = usbio;
+      dev->handle = handles[i];
       ret->dev = dev;
     }
 

@@ -141,6 +141,7 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
 
   opt_input = args[0];
   secret = buffer_read_file(opt_input, 0);
+
   if (opt_type) {
     uusb_type_t type;
 
@@ -148,6 +149,11 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
       return GRUB_ERR_BAD_ARGUMENT;
     dev = usb_open_type(&type);
   }
+
+  if (dev == NULL)
+    return GRUB_ERR_BAD_ARGUMENT;
+  
+  yubikey_init();
   return GRUB_ERR_NONE;
 }
 
