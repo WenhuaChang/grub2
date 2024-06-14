@@ -10,31 +10,6 @@ GRUB_MOD_LICENSE ("GPLv3+");
 
 #define MAX_CARDOPTS	16
 
-bool
-uusb_dev_select_ccid_interface(uusb_dev_t *dev, const struct ccid_descriptor **ccid_ret)
-{
-  (void) dev;
-  (void) ccid_ret;
-  return false;
-}
-
-bool
-uusb_send(uusb_dev_t *dev, buffer_t *pkt)
-{
-  (void) dev;
-  (void) pkt;
-  return false;
-}
-
-buffer_t *
-uusb_recv(uusb_dev_t *dev, size_t maxlen, long timeout)
-{
-  (void) dev;
-  (void) maxlen;
-  (void) timeout;
-  return NULL;
-}
-
 enum
 {
   UTOKEN_OPTION_DEVICE,
@@ -91,19 +66,70 @@ grub_utoken_decrypt_options[] =
     {0, 0, 0, 0, 0, 0}
   };
 
+static buffer_t *
+doit(uusb_dev_t *dev, const char *pin, buffer_t *ciphertext, unsigned int ncardopts, char **cardopts)
+{
+	ccid_reader_t *reader;
+	ifd_card_t *card;
+	buffer_t *cleartext;
+
+	if (!(reader = ccid_reader_create(dev))) {
+		error("Unable to create reader for USB device\n");
+		return NULL;
+	}
+
+	if (!ccid_reader_select_slot(reader, 0))
+		return NULL;
+
+	card = ccid_reader_identify_card(reader, 0);
+	if (card == NULL)
+		return NULL;
+
+	if (ncardopts) {
+		unsigned int i;
+		for (i = 0; i < ncardopts; ++i) {
+			if (!ifd_card_set_option(card, cardopts[i]))
+				return NULL;
+		}
+	}
+
+	if (!ifd_card_connect(card))
+		return NULL;
+
+	if (pin != NULL) {
+		unsigned int retries_left;
+
+		if (!ifd_card_verify(card, pin, strlen(pin), &retries_left)) {
+			error("Wrong PIN, %u attempts left\n", retries_left);
+			return NULL;
+		}
+
+		infomsg("Successfully verified PIN.\n");
+	}
+
+	cleartext = ifd_card_decipher(card, ciphertext);
+	if (cleartext == NULL) {
+		error("Card failed to decrypt secret\n");
+		return NULL;
+	}
+
+	return cleartext;
+}
+
 static grub_err_t
 grub_utoken_decrypt (grub_extcmd_context_t ctxt,
     int argc,
     char **args)
 {
+  buffer_t *secret;
+  buffer_t *cleartext;
+  char *cardopts[MAX_CARDOPTS];
+  unsigned int ncardopts = 0;
   char *opt_device = NULL;
   char *opt_type = NULL;
   char *opt_pin = NULL;
   char *opt_input = NULL;
   char *opt_output = NULL;
-  char *cardopts[MAX_CARDOPTS];
-  unsigned int ncardopts = 0;
-  buffer_t *secret;
   uusb_dev_t *dev = NULL;
 
   struct grub_arg_list *state = ctxt->state;
@@ -154,6 +180,12 @@ grub_utoken_decrypt (grub_extcmd_context_t ctxt,
     return GRUB_ERR_BAD_ARGUMENT;
   
   yubikey_init();
+  if (!(cleartext = doit(dev, opt_pin, secret, ncardopts, cardopts)))
+    return GRUB_ERR_BUG;
+  infomsg("Writing data to \"<stdout>\"\n");
+  buffer_print(cleartext);
+  infomsg("\n");
+  buffer_free(cleartext);
   return GRUB_ERR_NONE;
 }
 

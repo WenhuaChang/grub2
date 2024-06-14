@@ -7,6 +7,7 @@
 #include "uusb_impl.h"
 #include "util.h"
 #include "scard.h"
+#include "ccid_impl.h"
 #include "bufparser.h"
 
 #define GRUB_EFI_USB_IO_GUID \
@@ -144,7 +145,14 @@ struct grub_efi_usb_io {
       grub_efi_uintn_t data_length,
       grub_efi_uint32_t *status);
 
-  void (__grub_efi_api *bulk_transfer)(void);
+  grub_efi_status_t (__grub_efi_api *bulk_transfer) (
+      struct grub_efi_usb_io *this,
+      grub_efi_uint8_t device_endpoint,
+      void *data,
+      grub_efi_uintn_t *data_length,
+      grub_efi_uintn_t timeout,
+      grub_efi_uint32_t *status);
+
   void (__grub_efi_api *async_interrupt_transfer)(void);
   void (__grub_efi_api *sync_interrupt_transfer)(void);
   void (__grub_efi_api *isochronous_transfer)(void);
@@ -253,6 +261,223 @@ struct grub_usb_desc_head {
 
 typedef struct grub_usb_desc_head grub_usb_desc_head_t;
 
+struct grub_efi_usb_ccid_dev {
+  grub_efi_usb_io_t *usbio;
+  grub_efi_handle_t handle;
+  grub_efi_usb_interface_descriptor_t interface_desc;
+  grub_efi_usb_endpoint_descriptor_t bulk_in;
+  grub_efi_usb_endpoint_descriptor_t bulk_out;
+  grub_efi_usb_endpoint_descriptor_t interrupt_in;
+};
+
+typedef struct grub_efi_usb_ccid_dev grub_efi_usb_ccid_dev_t;
+
+static struct ccid_descriptor *
+get_ccid_descriptor (grub_efi_usb_io_t *usbio)
+{
+  grub_efi_usb_config_descriptor_t conf_desc;
+  grub_efi_status_t status;
+  struct ccid_descriptor *ccid_desc = NULL;
+
+  status = usbio->get_config_descriptor (usbio, &conf_desc);
+  if (status == GRUB_EFI_SUCCESS)
+    {
+      char *buf;
+      grub_efi_usb_device_request_t  req = { 0 };
+      grub_efi_uint32_t ret;
+
+      grub_printf ("conf totoal length: %u\n", conf_desc.total_length);
+
+      buf = grub_zalloc (conf_desc.total_length);
+
+#define USB_DEV_GET_DESCRIPTOR_REQ_TYPE  0x80
+
+      req.request_type = USB_DEV_GET_DESCRIPTOR_REQ_TYPE;
+      req.request = USB_REQ_GET_DESCRIPTOR;
+      req.value = (grub_efi_uint16_t)((USB_DESC_TYPE_CONFIG << 8) | (conf_desc.configuration_value - 1));
+      req.index = 0;
+      req.length = conf_desc.total_length;
+
+      status = usbio->control_transfer (
+	      usbio,
+	      &req,
+	      grub_efi_usb_data_in,
+	      3000,
+	      buf,
+	      conf_desc.total_length,
+	      &ret
+	      );
+
+      if (status == GRUB_EFI_SUCCESS)
+	{
+	  grub_efi_uint16_t total;
+	  grub_usb_desc_head_t *head;
+	  grub_efi_boolean_t ccid;
+
+	  total = 0;
+	  head = (grub_usb_desc_head_t *)buf;
+	  ccid = 0;
+
+	  while (total < conf_desc.total_length)
+	    {
+	      grub_printf ("type: 0x%02x\n", head->type);
+
+	      if (head->type == USB_DESC_TYPE_INTERFACE &&
+		  ((grub_efi_usb_interface_descriptor_t *)head)->interface_class == GRUB_USB_CLASS_SMART_CARD &&
+		  ((grub_efi_usb_interface_descriptor_t *)head)->interface_subclass == 0 &&
+		  ((grub_efi_usb_interface_descriptor_t *)head)->interface_protocol == 0)
+		{
+		  grub_printf ("found CCID interface\n");
+		  ccid = 1;
+		}
+	      else if (ccid == 1 && head->type == USB_DESC_TYPE_ENDPOINT)
+		{
+		  grub_printf ("no CCID descriptor follows the CCID interface\n");
+		  break;
+		}
+	      else if (ccid == 1 && head->type == 0x21)
+		{
+		  grub_efi_usb_ccid_descriptor_t *desc = (grub_efi_usb_ccid_descriptor_t *)head;
+
+		  if (head->len != sizeof (*desc) || total + head->len > conf_desc.total_length)
+		    break;
+
+		  ccid_desc = grub_malloc (sizeof(*ccid_desc));
+
+		  if (!ccid_desc)
+		    break;
+
+		  ccid_desc->bcdCCID = desc->bcdccid;
+		  ccid_desc->bMaxSlotIndex = desc->max_slot_index;
+		  ccid_desc->bVoltageSupport = desc->voltage_support;
+		  ccid_desc->dwProtocols = desc->protocols;
+		  ccid_desc->dwDefaultClock = desc->default_clock;
+		  ccid_desc->dwMaximumClock = desc->maximum_clock;
+		  ccid_desc->bNumClockRatesSupported = desc->num_clock_rates_supported;
+		  ccid_desc->dwDataRate = desc->data_rate;
+		  ccid_desc->dwMaxDataRate = desc->max_data_rate;
+		  ccid_desc->bNumDataRatesSupported = desc->num_data_rates_supported;
+		  ccid_desc->dwMaxIFSD = desc->max_ifsd;
+		  ccid_desc->dwSynchProtocols = desc->synch_protocols;
+		  ccid_desc->dwMechanical = desc->mechanical;
+		  ccid_desc->dwFeatures = desc->features;
+		  ccid_desc->dwMaxCCIDMessageLength = desc->max_ccid_message_length;
+		  ccid_desc->bClassGetResponse = desc->class_get_response;
+		  ccid_desc->bClassEnvelope = desc->class_envelope;
+		  ccid_desc->wLcdLayout = desc->lcd_layout;
+		  ccid_desc->bPINSupport = desc->pin_support;
+		  ccid_desc->bMaxCCIDBusySlots = desc->max_ccid_busy_slots;
+
+		  break;
+		}
+
+	      total += (grub_efi_uint16_t)head->len;
+	      head  = (grub_usb_desc_head_t *)((grub_efi_uint8_t *)buf + total);
+	    }
+	}
+      grub_free (buf);
+    }
+
+  return ccid_desc;
+}
+
+bool
+uusb_dev_select_ccid_interface(uusb_dev_t *usbdev, const struct ccid_descriptor **ccid_ret)
+{
+  grub_efi_usb_ccid_dev_t *cciddev = (grub_efi_usb_ccid_dev_t *)usbdev->dev;
+  grub_efi_usb_io_t *usbio = cciddev->usbio;
+  grub_efi_usb_interface_descriptor_t *interface = &cciddev->interface_desc;
+  grub_efi_status_t status;
+  unsigned i;
+
+  if ((*ccid_ret = get_ccid_descriptor (cciddev->usbio)) == NULL)
+    return false;
+
+  /* FIXME: Need better error handling */
+  for (i = 0; i < interface->num_endpoints; i++)
+    {
+      grub_efi_usb_endpoint_descriptor_t endp;
+
+      status = usbio->get_endpoint_descriptor (usbio, i, (grub_efi_usb_endpoint_descriptor_t *) &endp);
+      if (status != GRUB_EFI_SUCCESS)
+	continue;
+
+      if (endp.endpoint_address & 128)
+	{
+	  if (grub_usb_get_ep_type ((struct grub_usb_desc_endp *)&endp) == GRUB_USB_EP_BULK)
+	    {
+	      grub_printf ("  Bulk IN 0x%02x\n", endp.endpoint_address);
+	      cciddev->bulk_in = endp;
+	    }
+	  else if (grub_usb_get_ep_type ((struct grub_usb_desc_endp *)&endp) == GRUB_USB_EP_INTERRUPT)
+	    {
+	      grub_printf ("  Interrupt IN 0x%02x\n", endp.endpoint_address);
+	      cciddev->interrupt_in = endp;
+	    }
+	}
+      else if (grub_usb_get_ep_type ((struct grub_usb_desc_endp *)&endp) == GRUB_USB_EP_BULK)
+	{
+	  grub_printf ("  Bulk OUT 0x%02x\n", endp.endpoint_address);
+	  cciddev->bulk_out = endp;
+	}
+    }
+
+  return true;
+}
+
+bool
+uusb_send(uusb_dev_t *usbdev, buffer_t *pkt)
+{
+  grub_efi_usb_ccid_dev_t *cciddev = (grub_efi_usb_ccid_dev_t *)usbdev->dev;
+  grub_efi_usb_io_t *usbio = cciddev->usbio;
+  grub_efi_uint8_t ep = cciddev->bulk_out.endpoint_address;
+  grub_efi_status_t status;
+  grub_efi_uint32_t ret;
+  grub_efi_uintn_t data_len = buffer_available(pkt);
+
+  status = usbio->bulk_transfer (
+      usbio, ep,
+      (void *) buffer_read_pointer(pkt), &data_len,
+      10000, &ret);
+
+  if (status == GRUB_EFI_SUCCESS)
+    return data_len;
+
+  return false;
+}
+
+buffer_t *
+uusb_recv(uusb_dev_t *usbdev, size_t maxlen, long timeout)
+{
+  grub_efi_usb_ccid_dev_t *cciddev = (grub_efi_usb_ccid_dev_t *)usbdev->dev;
+  grub_efi_usb_io_t *usbio = cciddev->usbio;
+  grub_efi_uint8_t ep = cciddev->bulk_in.endpoint_address;
+  grub_efi_status_t status;
+  grub_efi_uint32_t ret;
+  buffer_t *pkt;
+  grub_efi_uintn_t data_len;
+
+  /* Allocate a response packet large enough to hold the max response size */
+  pkt = buffer_alloc_write (maxlen);
+  data_len = buffer_tailroom (pkt);
+  grub_memset (buffer_write_pointer (pkt), 0xAA, data_len);
+
+  status = usbio->bulk_transfer (
+      usbio, ep,
+      (void *) buffer_write_pointer(pkt), &data_len,
+      timeout, &ret);
+
+  if (status != GRUB_EFI_SUCCESS)
+    {
+      buffer_free (pkt);
+      return NULL;
+    }
+
+  /* there should be a buffer_* function for this */
+  pkt->wpos += data_len;
+  return pkt;
+}
+
 bool
 usb_parse_type(const char *string, uusb_type_t *type)
 {
@@ -302,14 +527,6 @@ process_device_descriptor (
   dd->bNumConfigurations = desc->num_configurations;
   grub_printf ("In process_device_descriptor\n");
 }
-
-
-struct grub_efi_usb_ccid_dev {
-  grub_efi_usb_io_t *usbio;
-  grub_efi_handle_t handle;
-};
-
-typedef struct grub_efi_usb_ccid_dev grub_efi_usb_ccid_dev_t;
 
 uusb_dev_t *
 usb_open_type(const uusb_type_t *type)
@@ -371,6 +588,7 @@ usb_open_type(const uusb_type_t *type)
       process_device_descriptor (&desc, &ret->descriptor);
       dev->usbio = usbio;
       dev->handle = handles[i];
+      dev->interface_desc = interface_desc;
       ret->dev = dev;
     }
 
