@@ -113,6 +113,65 @@ read_config_file_getline (char **line, int cont __attribute__ ((unused)),
   return GRUB_ERR_NONE;
 }
 
+#ifdef GRUB_MACHINE_EFI
+
+static void
+read_envblk_from_cmdpath (void)
+{
+  const char *cmdpath;
+  char *envfile = NULL;
+  int found = 0;
+
+  cmdpath = grub_env_get ("cmdpath");
+
+  if (cmdpath)
+    envfile = grub_xasprintf ("%s/grubenv", cmdpath);
+
+  if (envfile)
+    {
+      grub_file_t file;
+
+      file = grub_file_open (envfile, GRUB_FILE_TYPE_FS_SEARCH
+			     | GRUB_FILE_TYPE_NO_DECOMPRESS | GRUB_FILE_TYPE_SKIP_SIGNATURE);
+      if (file)
+	{
+	  found = 1;
+	  grub_file_close (file);
+	}
+    }
+
+  if (found)
+    {
+      char *cfg;
+
+      cfg = grub_xasprintf ("load_env -f %s\n", envfile);
+      grub_parser_execute ((char *)cfg);
+      grub_free (cfg);
+    }
+
+  grub_free (envfile);
+}
+
+static grub_menu_t
+read_blscfg (void)
+{
+  grub_menu_t newmenu;
+  newmenu = grub_env_get_menu ();
+  if (! newmenu)
+    {
+      newmenu = grub_zalloc (sizeof (*newmenu));
+      if (! newmenu)
+	return 0;
+
+      grub_env_set_menu (newmenu);
+    }
+
+  grub_parser_execute ((char *)"blscfg\n");
+  return newmenu;
+}
+
+#endif
+
 static grub_menu_t
 read_config_file (const char *config)
 {
@@ -282,6 +341,26 @@ grub_normal_execute (const char *config, int nested, int batch)
 
   grub_boot_time ("Executing config file");
 
+#ifdef GRUB_MACHINE_EFI
+  const char *val;
+
+  val = grub_env_get ("enable_blscfg");
+  if (val && (val[0] == '1' || val[0] == 'y'))
+    read_envblk_from_cmdpath ();
+
+  /* Above would be used to override enable_blscfg, so verify again */
+  val = grub_env_get ("enable_blscfg");
+  if (val && (val[0] == '1' || val[0] == 'y'))
+    {
+      menu = read_blscfg ();
+      /* Ignore any error.  */
+      grub_errno = GRUB_ERR_NONE;
+      /* unset to let configfile and source commands continue to work */
+      grub_env_unset ("enable_blscfg");
+      goto check_batch;
+    }
+#endif
+
   if (config)
     {
       menu = read_config_file (config);
@@ -307,6 +386,9 @@ grub_normal_execute (const char *config, int nested, int batch)
 
   grub_boot_time ("Executed config file");
 
+#ifdef GRUB_MACHINE_EFI
+ check_batch:
+#endif
   if (! batch)
     {
       if (menu && menu->size)

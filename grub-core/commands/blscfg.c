@@ -953,10 +953,14 @@ static void create_entry (struct bls_entry *entry)
 
   const char *sdval = grub_env_get("save_default");
   bool savedefault = ((NULL != sdval) && (grub_strcmp(sdval, "true") == 0));
+#ifdef GRUB_MACHINE_EFI
+  src = grub_xasprintf ("%slinux %s%s%s%s\n"
+#else
   src = grub_xasprintf ("%sload_video\n"
 			"set gfxpayload=keep\n"
 			"insmod gzio\n"
 			"linux %s%s%s%s\n"
+#endif
 			"%s%s",
 			savedefault ? "savedefault\n" : "",
 #ifdef GRUB_MACHINE_EMU
