@@ -1,0 +1,1 @@
+root=@GRUB_DEVICE@ @GRUB_EMU_CONMODE@ @GRUB_CMDLINE_LINUX@ @GRUB_CMDLINE_LINUX_DEFAULT@ initgrub quiet splash=silent plymouth.enable=0
