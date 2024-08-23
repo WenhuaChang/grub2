@@ -1,0 +1,17 @@
+## This is the template for '@zipldir@/config' and is subject to
+## rpm's %config file handling in case of grub2-s390x-emu package update.
+
+[defaultboot]
+defaultmenu = menu
+
+[grub2-secure]
+    target = @zipldir@
+    image = @zipldir@/secure-linux
+
+:menu
+    target = @zipldir@
+    timeout = 60
+    default = 1
+    prompt = 0
+    secure = @SUSE_SECURE_BOOT@
+    1 = grub2-secure
