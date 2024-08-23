@@ -805,6 +805,23 @@ data = {
   emu_condition = COND_s390x;
 };
 
+data = {
+  name = se-parm.conf.in;
+  common = util/s390x/se-parm.conf.in;
+  installdir = grubconf;
+  enable = emu;
+  emu_condition = COND_s390x;
+};
+
+data = {
+  name = se-zipl2grub.conf.in;
+  common = util/s390x/se-zipl2grub.conf.in;
+  installdir = grubconf;
+  enable = emu;
+  emu_condition = COND_s390x;
+};
+
+
 script = {
   name = dracut-module-setup.sh;
   common = util/s390x/dracut-module-setup.sh.in;
