@@ -1310,6 +1310,15 @@ grub_cryptodisk_cheat_mount (const char *sourcedev, const char *cheat)
 #endif
 
 static int
+is_valid_diskfilter_name (const char *name)
+{
+  return (grub_memcmp (name, "md", sizeof ("md") - 1) == 0
+	  || grub_memcmp (name, "lvm/", sizeof ("lvm/") - 1) == 0
+	  || grub_memcmp (name, "lvmid/", sizeof ("lvmid/") - 1) == 0
+	  || grub_memcmp (name, "ldm/", sizeof ("ldm/") - 1) == 0);
+}
+
+static int
 grub_cryptodisk_scan_device (const char *name,
 			     void *data)
 {
@@ -1323,7 +1332,11 @@ grub_cryptodisk_scan_device (const char *name,
   source = grub_disk_open (name);
   if (!source)
     {
-      grub_print_error ();
+      /* The logical device may not be ready at this point */
+      if (is_valid_diskfilter_name (name) && grub_errno == GRUB_ERR_UNKNOWN_DEVICE)
+	grub_errno = GRUB_ERR_NONE;
+      else
+	grub_print_error ();
       return 0;
     }
 
@@ -1369,6 +1382,68 @@ grub_cryptodisk_clear_key_cache (struct grub_cryptomount_args *cargs)
     }
 
   grub_free (cargs->key_cache);
+}
+
+#include <grub/env.h>
+
+static int
+find_root_device (const char *name, void *data)
+{
+  char **ret = data;
+  grub_disk_t disk;
+  int is_crypto = 0;
+  int found = 0;
+
+  disk = grub_disk_open (name);
+
+  if (!disk)
+    {
+      /* The logical device may not be ready at this point */
+      if (is_valid_diskfilter_name (name) && grub_errno == GRUB_ERR_UNKNOWN_DEVICE)
+	grub_errno = GRUB_ERR_NONE;
+      else
+	grub_print_error ();
+      return 0;
+    }
+
+  is_crypto = grub_disk_is_crypto (disk);
+  grub_disk_close (disk);
+
+  if (is_crypto)
+    {
+      const char *sig[] = {"/boot/grub2/grub.cfg", "/grub2/grub.cfg", NULL};
+      const char **ps;
+
+      for (ps = sig; *ps; ps++)
+      {
+	char *buf;
+	grub_file_t file;
+
+	buf = grub_xasprintf ("(%s)%s", name, *ps);
+	if (! buf)
+	  return 1;
+
+	file = grub_file_open (buf, GRUB_FILE_TYPE_FS_SEARCH
+			       | GRUB_FILE_TYPE_NO_DECOMPRESS);
+	if (file)
+	  {
+	    found = 1;
+	    grub_free (buf);
+	    grub_file_close (file);
+	    break;
+	  }
+	else
+	  {
+	    grub_errno = GRUB_ERR_NONE;
+	    grub_free (buf);
+	  }
+      }
+    }
+
+  if (found && ret)
+    *ret = grub_strdup (name);
+
+  return found;
 }
 
 static grub_err_t
@@ -1508,7 +1583,17 @@ grub_cmd_cryptomount (grub_extcmd_context_t ctxt, int argc, char **args)
       grub_cryptodisk_clear_key_cache (&cargs);
 
       if (found_uuid)
-	return GRUB_ERR_NONE;
+	{
+	  char *ret;
+
+	  if (grub_device_iterate (find_root_device, &ret) && ret)
+	    grub_env_set ("root", ret);
+	  else
+	    grub_errno = GRUB_ERR_NONE;
+
+	  return GRUB_ERR_NONE;
+	}
+
       else if (grub_errno == GRUB_ERR_NONE)
 	{
 	  /*
@@ -1568,6 +1653,16 @@ grub_cmd_cryptomount (grub_extcmd_context_t ctxt, int argc, char **args)
 
       dev = grub_cryptodisk_scan_device_real (diskname, disk, &cargs);
       grub_cryptodisk_clear_key_cache (&cargs);
+
+      if (dev)
+	{
+	  char *ret;
+
+	  if (grub_device_iterate (find_root_device, &ret) && ret)
+	    grub_env_set ("root", ret);
+	  else
+	    grub_errno = GRUB_ERR_NONE;
+	}
 
       grub_disk_close (disk);
       if (disklast)
