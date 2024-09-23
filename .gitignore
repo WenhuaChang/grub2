@@ -56,6 +56,9 @@ mdate-sh
 mod-*.c
 update-grub_lib
 widthspec.bin
+compile_commands.json
+build-ppc64le/
+po/
 
 #
 # Ignore patterns relative to this .gitignore file's directory.
