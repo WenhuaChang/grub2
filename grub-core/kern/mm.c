@@ -710,10 +710,22 @@ grub_mm_dump_free (void)
 
       /* Follow the free list.  */
       p = r->first;
+
       do
 	{
 	  if (p->magic != GRUB_MM_FREE_MAGIC)
-	    grub_fatal ("free magic is broken at %p: 0x%x", p, p->magic);
+	    {
+	      if (p->magic == GRUB_MM_ALLOC_MAGIC)
+		{
+		  grub_printf ("A:%p:%u:%p\n",
+		       p, (unsigned int) p->size << GRUB_MM_ALIGN_LOG2, p->next);
+
+		  p = p->next;
+		  continue;
+		}
+	      else
+		grub_fatal ("free magic is broken at %p: 0x%x", p, p->magic);
+	    }
 
 	  grub_printf ("F:%p:%u:%p\n",
 		       p, (unsigned int) p->size << GRUB_MM_ALIGN_LOG2, p->next);
