@@ -229,6 +229,9 @@ grub_initrd_init (int argc, char *argv[],
   grub_crypto_key_list_t *pk;
   int numkey = 0;
 
+  grub_printf ("before:\n  ");
+  grub_mm_print_region_size ();
+
   initrd_ctx->nfiles = 0;
   initrd_ctx->components = 0;
 
@@ -325,6 +328,8 @@ grub_initrd_init (int argc, char *argv[],
       root = 0;
     }
 
+  grub_printf ("after:\n  ");
+  grub_mm_print_region_size ();
   return GRUB_ERR_NONE;
 
  overflow:
@@ -421,5 +426,8 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
     }
   free_dir (root);
   root = 0;
+
+  grub_printf ("after read:\n  ");
+  grub_mm_print_region_size ();
   return GRUB_ERR_NONE;
 }

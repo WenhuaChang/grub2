@@ -96,6 +96,7 @@ extern int EXPORT_VAR(grub_mm_debug);
 
 void EXPORT_FUNC(grub_mm_dump_free) (void);
 void EXPORT_FUNC(grub_mm_dump) (unsigned lineno);
+void EXPORT_FUNC(grub_mm_print_region_size) (void);
 
 #define grub_calloc(nmemb, size)	\
   grub_debug_calloc (GRUB_FILE, __LINE__, nmemb, size)

@@ -770,6 +770,16 @@ grub_mm_dump (unsigned lineno)
   grub_printf ("\n");
 }
 
+void
+grub_mm_print_region_size (void)
+{
+  grub_mm_region_t r;
+  grub_size_t total = 0;
+  for (r = grub_mm_base; r; r = r->next)
+    total += r->size;
+  grub_printf ("heap total : %" PRIuGRUB_SIZE "MiB\n", total >> 20); 
+}
+
 void *
 grub_debug_calloc (const char *file, int line, grub_size_t nmemb, grub_size_t size)
 {
