@@ -139,7 +139,8 @@ enum grub_file_type
 
     /* --skip-sig is specified.  */
     GRUB_FILE_TYPE_SKIP_SIGNATURE = 0x10000,
-    GRUB_FILE_TYPE_NO_DECOMPRESS = 0x20000
+    GRUB_FILE_TYPE_NO_DECOMPRESS = 0x20000,
+    GRUB_FILE_TYPE_LAZY_VERIFY = 0x40000,
   };
 
 /* File description.  */

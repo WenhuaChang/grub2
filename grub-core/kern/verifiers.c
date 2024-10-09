@@ -30,8 +30,19 @@ struct grub_verified
 {
   grub_file_t file;
   void *buf;
+  enum grub_file_type type;
+  struct grub_file_verifier *ver;
 };
 typedef struct grub_verified *grub_verified_t;
+
+struct grub_verify_lazy
+{
+  grub_file_t file;
+  enum grub_file_type type;
+  struct grub_file_verifier *ver;
+  void *context;
+};
+typedef struct grub_verify_lazy *grub_verify_lazy_t;
 
 static void
 verified_free (grub_verified_t verified)
@@ -73,6 +84,123 @@ struct grub_fs verified_fs =
   .name = "verified_read",
   .fs_read = verified_read,
   .fs_close = verified_close
+};
+
+static grub_ssize_t
+verified_read_lazy (struct grub_file *file, char *buf, grub_size_t len)
+{
+  grub_verify_lazy_t lazy = file->data;
+  grub_file_t io = lazy->file;
+  enum grub_file_type type = lazy->type;
+  struct grub_file_verifier *ver = lazy->ver;
+  void *context = lazy->context;
+  grub_err_t err = GRUB_ERR_NONE;
+  grub_ssize_t ret = -1;
+
+  if (file->offset > 0 || len < io->size)
+    {
+      grub_error (GRUB_ERR_FILE_READ_ERROR, "need verify in single chunks %s", io->name);
+      goto fail;
+    }
+
+  if (grub_file_read (io, buf + file->offset, len) != (grub_ssize_t) len)
+    {
+      if (!grub_errno)
+	grub_error (GRUB_ERR_FILE_READ_ERROR, N_("premature end of file %s"),
+		    io->name);
+      goto fail;
+    }
+
+  err = ver->write (context, buf, len);
+  if (err)
+    {
+      grub_memset (buf, 0, len);
+      grub_file_seek (io, file->offset);
+      if (ver->close)
+	ver->close (context);
+      goto fail;
+    }
+
+  err = ver->fini ? ver->fini (context) : GRUB_ERR_NONE;
+  if (err)
+    {
+      grub_memset (buf, 0, len);
+      grub_file_seek (io, file->offset);
+      if (ver->close)
+	ver->close (context);
+      goto fail;
+    }
+
+  FOR_LIST_ELEMENTS_NEXT(ver, grub_file_verifiers)
+    {
+      enum grub_verify_flags flags = 0;
+      err = ver->init (io, type, &context, &flags);
+      if (err)
+	{
+	  grub_memset (buf, 0, len);
+	  grub_file_seek (io, file->offset);
+	  goto fail;
+	}
+      if (flags & GRUB_VERIFY_FLAGS_SKIP_VERIFICATION ||
+	  /* Verification done earlier. So, we are happy here. */
+	  flags & GRUB_VERIFY_FLAGS_DEFER_AUTH)
+	continue;
+      err = ver->write (context, buf, len);
+      if (err)
+	{
+	  grub_memset (buf, 0, len);
+	  grub_file_seek (io, file->offset);
+	  if (ver->close)
+	    ver->close (context);
+	  goto fail;
+	}
+
+      err = ver->fini ? ver->fini (context) : GRUB_ERR_NONE;
+      if (err)
+	{
+	  grub_memset (buf, 0, len);
+	  grub_file_seek (io, file->offset);
+	  if (ver->close)
+	    ver->close (context);
+	  goto fail;
+	}
+
+      if (ver->close)
+	ver->close (context);
+    }
+
+  ret = len;
+
+ fail:
+  return ret;
+}
+
+static grub_err_t
+verified_close_lazy (struct grub_file *file)
+{
+  grub_verify_lazy_t lazy = file->data;
+  struct grub_file_verifier *ver = lazy->ver;
+  void *context = lazy->context;
+
+  grub_file_close (lazy->file);
+
+  if (ver->close)
+    ver->close (context);
+
+  file->data = 0;
+
+  /* Device and name are freed by parent. */
+  file->device = 0;
+  file->name = 0;
+
+  return grub_errno;
+}
+
+struct grub_fs verified_fs_lazy =
+{
+  .name = "verified_read_lazy",
+  .fs_read = verified_read_lazy,
+  .fs_close = verified_close_lazy
 };
 
 static grub_file_t
@@ -123,6 +251,36 @@ grub_verifiers_open (grub_file_t io, enum grub_file_type type)
 
       /* No verifiers wanted to verify. Just return underlying file. */
       return io;
+    }
+
+  if (type & GRUB_FILE_TYPE_LAZY_VERIFY)
+    {
+      grub_verify_lazy_t lazy = NULL;
+
+      ret = grub_malloc (sizeof (*ret));
+
+      if (!ret)
+	goto fail_noclose;
+
+      *ret = *io;
+      ret->fs = &verified_fs_lazy;
+      ret->not_easily_seekable = 0;
+      if (ret->size >> (sizeof (grub_size_t) * GRUB_CHAR_BIT - 1))
+	{
+	  grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+		      N_("big file signature isn't implemented yet"));
+	  goto fail_noclose;
+	}
+      lazy = grub_malloc (sizeof (*lazy));
+      if (!lazy)
+	goto fail_noclose;
+
+      lazy->file = io;
+      lazy->type = type;
+      lazy->ver = ver;
+      lazy->context = context;
+      ret->data = lazy;
+      return ret;
     }
 
   ret = grub_malloc (sizeof (*ret));

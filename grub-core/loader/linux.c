@@ -291,7 +291,8 @@ grub_initrd_init (int argc, char *argv[],
 	}
       initrd_ctx->components[i].file = grub_file_open (fname,
 						       GRUB_FILE_TYPE_LINUX_INITRD
-						       | GRUB_FILE_TYPE_NO_DECOMPRESS);
+						       | GRUB_FILE_TYPE_NO_DECOMPRESS
+						       | GRUB_FILE_TYPE_LAZY_VERIFY);
       if (!initrd_ctx->components[i].file)
 	{
 	  grub_initrd_close (initrd_ctx);
