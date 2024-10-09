@@ -23,6 +23,7 @@
 #include <grub/err.h>
 #include <grub/types.h>
 #include <grub/symbol.h>
+#include <grub/err.h>
 #include <config.h>
 
 #ifndef NULL
