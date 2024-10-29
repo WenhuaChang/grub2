@@ -137,7 +137,11 @@ grub_set_prefix_and_root (void)
     {
       char *cmdpath;
 
-      cmdpath = grub_xasprintf ("(%s)%s", fwdevice, fwpath ? : "");
+      if (fwpath && *fwpath == '\0')
+	cmdpath = grub_xasprintf ("(%s)/", fwdevice);
+      else
+	cmdpath = grub_xasprintf ("(%s)%s", fwdevice, fwpath ? : "");
+
       if (cmdpath)
 	{
 	  grub_env_set ("cmdpath", cmdpath);
