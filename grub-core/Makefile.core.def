@@ -2646,6 +2646,7 @@ module = {
   /* The plaform support of tpm2_key_protector depends on the tcg2 implementation in tss2. */
   enable = efi;
   enable = emu;
+  enable = powerpc_ieee1275;
   cppflags = '-I$(srcdir)/lib/tss2';
 };
 
