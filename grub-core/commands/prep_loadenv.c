@@ -11,6 +11,7 @@
 #include <grub/i18n.h>
 #include <grub/gpt_partition.h>
 #include <regex.h>
+#include <grub/tpm.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -122,6 +123,7 @@ prep_read_envblk (const char *devname)
   char *buf = NULL;
   grub_device_t dev = NULL;
   grub_envblk_t envblk = NULL;
+  grub_err_t err;
 
   dev = grub_device_open (devname);
   if (!dev)
@@ -139,6 +141,23 @@ prep_read_envblk (const char *devname)
 
   if (grub_disk_read (dev->disk, dev->disk->partition->len - (GRUB_ENVBLK_PREP_SIZE >> GRUB_DISK_SECTOR_BITS), 0, GRUB_ENVBLK_PREP_SIZE, buf))
     goto fail;
+
+  /*
+   * Measure the environment block in the PReP partition
+   * The firmware is not aware of this block, so the content of the environment
+   * block is not measured into PCR 4.
+   */
+  if (grub_tpm_present () == true)
+    {
+      err = grub_tpm_measure ((unsigned char*)buf, GRUB_ENVBLK_PREP_SIZE, GRUB_BINARY_PCR, "PReP envblk");
+      if (err != GRUB_ERR_NONE && grub_is_tpm_fail_fatal () == true)
+	{
+	  grub_errno = err;
+	  goto fail;
+	}
+      else
+	grub_errno = GRUB_ERR_NONE;
+    }
 
   envblk = grub_envblk_open (buf, GRUB_ENVBLK_PREP_SIZE);
   if (!envblk)
