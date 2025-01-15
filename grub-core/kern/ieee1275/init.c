@@ -854,7 +854,7 @@ grub_ieee1275_ibm_cas (void)
     .vec1 = 0x80, /* ignore */
     .vec2_size = 1 + sizeof (struct option_vector2) - 2,
     .vec2 = {
-      0, 0, -1, -1, -1, -1, -1, 512, -1, 0, 48
+      0, 0, -1, -1, -1, -1, -1, 768, -1, 0, 48
     },
     .vec3_size = 2 - 1,
     .vec3 = 0x00e0, /* ask for FP + VMX + DFP but don't halt if unsatisfied */
@@ -891,6 +891,10 @@ grub_claim_heap (void)
 {
   grub_err_t err;
   grub_uint32_t total = HEAP_MAX_SIZE;
+#if defined(__powerpc__)
+  grub_uint32_t ibm_ca_support_reboot;
+  grub_ssize_t actual;
+#endif
 
   err = grub_ieee1275_total_mem (&rmo_top);
 
@@ -903,11 +907,32 @@ grub_claim_heap (void)
     grub_mm_add_region_fn = grub_ieee1275_mm_add_region;
 
 #if defined(__powerpc__)
+  /* Check if it's a CAS reboot with below property. If so, we will skip CAS call */
+  ibm_ca_support_reboot = 0;
+  if (grub_ieee1275_get_integer_property (grub_ieee1275_chosen,
+                                          "ibm,client-architecture-support-reboot",
+                                          &ibm_ca_support_reboot,
+                                          sizeof (ibm_ca_support_reboot),
+                                          &actual) >= 0)
+    grub_dprintf ("ieee1275", "ibm,client-architecture-support-reboot: %u\n",
+                  ibm_ca_support_reboot);
+
   if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_CAN_TRY_CAS_FOR_MORE_MEMORY))
     {
-      /* if we have an error, don't call CAS, just hope for the best */
-      if (err == GRUB_ERR_NONE && rmo_top < (512 * 1024 * 1024))
-	grub_ieee1275_ibm_cas ();
+      /*
+       * If we have an error or the reboot is detected as CAS reboot,
+       * don't call CAS, just hope for the best.
+       * Along with the above, if the rmo_top is 512 MB or above. We
+       * will skip the CAS call. Though if we call CAS, the rmo_top will
+       * be set to 768 MB via CAS Vector2. This condition is required to avoid the
+       * issue where the older Linux kernels are still using rmo_top as 512 MB.
+       * Calling CAS when rmo_top is less then 768 MB will result in a issue
+       * where we won't be able to boot to a newer kernel and continue to
+       * boot with older kernel having rmo_top as 512 MB.
+       */
+      if (!ibm_ca_support_reboot && err == GRUB_ERR_NONE
+          && rmo_top < (512 * 1024 * 1024))
+        grub_ieee1275_ibm_cas ();
     }
 #endif
 
