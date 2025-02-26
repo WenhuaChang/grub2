@@ -266,6 +266,11 @@ grub_util_pull_devmapper (const char *os_dev)
               remaining -= seek_head - c + 1;
               c = seek_head + 1;
 
+#if defined (__s390x__)
+	      if (grub_strcasecmp (cipher, "paes") == 0)
+		grub_strcpy(cipher, "aes");
+#endif
+
               /* Now, the cipher mode. */
               seek_head = grub_memchr (c, ' ', remaining);
               if (seek_head == NULL)

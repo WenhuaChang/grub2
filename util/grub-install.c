@@ -1108,11 +1108,13 @@ main (int argc, char *argv[])
     char *t = grub_util_path_concat (2, "/", rootdir);
 
 #ifdef __linux__
-    if (!grub_can_guess_from_mountinfo (t))
+    if (!grub_can_guess_from_mountinfo (t) || platform == GRUB_INSTALL_PLATFORM_S390X_EMU)
       {
 	free(t);
 	/* We can safely ignore the root probe here; whichever cannot be
-	 * reliably detected is irrelevant and of no interest */
+	 * reliably detected is irrelevant and of no interest.
+	 * Also the s390x-emu, this btrfs root detection can be omitted given
+	 * it is not relevant to the capability of linux host system */
 	goto skip_root_probe;
       }
 #endif
