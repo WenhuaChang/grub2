@@ -42,6 +42,11 @@ autoload_fs_module (void)
 	  break;
 	}
 
+      /* We put zfs in a separate package, so ignoring if it's not found */
+      if (grub_strcmp (p->name, "zfs") == 0 &&
+	  grub_errno == GRUB_ERR_FILE_NOT_FOUND)
+	grub_errno = GRUB_ERR_NONE;
+
       if (grub_errno)
 	grub_print_error ();
 
