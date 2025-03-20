@@ -20,6 +20,7 @@
 #include <config.h>
 
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/types.h>
 #include <assert.h>
 #include <fcntl.h>
@@ -494,6 +495,33 @@ error:
   return NULL;
 }
 
+#define BTRFS_SUPER_MAGIC 0x9123683e
+#define BTRFS_FIRST_FREE_OBJECTID 256ULL
+
+static bool
+is_btrfs_subvolume (char *mnt_path)
+{
+  struct statfs sfs;
+  struct stat st;
+  int ret;
+
+  ret = statfs (mnt_path, &sfs);
+  if (ret != 0)
+    return false;
+
+  if (sfs.f_type != BTRFS_SUPER_MAGIC)
+    return false;
+
+  ret = stat(mnt_path, &st);
+  if (ret != 0)
+    return false;
+
+  if (st.st_ino != BTRFS_FIRST_FREE_OBJECTID || !S_ISDIR(st.st_mode))
+    return false;
+
+  return true;
+}
+
 static char *grub_btrfs_mount_path;
 
 char **
@@ -639,9 +667,17 @@ again:
 	}
       else if (grub_strcmp (entries[i].fstype, "btrfs") == 0)
 	{
-	  ret = grub_find_root_devices_from_btrfs (dir);
 	  if (use_relative_path_on_btrfs)
 	    {
+	      /* 'transactional-update apply' mounts '/boot' to the newly
+		 created snapshot with 'mount --rbind', and this creates a
+		 non-subvolume btrfs mount point. Such mount point will be
+		 gone after reboot. Skip those mount points to produce the
+		 correct relative path. (bsc#1239674) */
+	      if (!is_btrfs_subvolume (entries[i].enc_path))
+		continue;
+
+	      ret = grub_find_root_devices_from_btrfs (dir);
 	      fs_prefix = xstrdup ("/");
 
 	      if (grub_btrfs_mount_path)
@@ -650,6 +686,7 @@ again:
 	    }
 	  else
 	    {
+	      ret = grub_find_root_devices_from_btrfs (dir);
 	      fs_prefix = get_btrfs_fs_prefix (entries[i].enc_path);
 	    }
 	}
