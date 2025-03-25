@@ -275,6 +275,13 @@ grub_uint64_t
 find_mtab_subvol_tree (const char *path, char **path_in_subvol);
 
 static grub_err_t
+grub_btrfs_get_parent_subvol_path (struct grub_btrfs_data *data,
+		grub_uint64_t child_id,
+		const char *child_path,
+		grub_uint64_t *parent_id,
+		char **path_out);
+
+static grub_err_t
 read_sblock (grub_disk_t disk, struct grub_btrfs_superblock *sb)
 {
   struct grub_btrfs_superblock sblock;
@@ -2959,8 +2966,8 @@ static grub_err_t
 grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
 			     int argc, char **argv)
 {
-  struct grub_btrfs_data *data;
-  grub_device_t dev;
+  struct grub_btrfs_data *data = NULL;
+  grub_device_t dev = NULL;
   char *devname;
   grub_uint64_t tree;
   struct grub_btrfs_key key_in = {
@@ -2968,14 +2975,12 @@ grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
     .type = GRUB_BTRFS_ROOT_REF_KEY,
     .offset = 0,
   }, key_out;
-  struct grub_btrfs_leaf_descriptor desc;
+  struct grub_btrfs_leaf_descriptor desc = {0};
   grub_disk_addr_t elemaddr;
   grub_uint64_t fs_root = 0;
   grub_size_t elemsize;
-  grub_size_t allocated = 0;
   int r = 0;
   grub_err_t err;
-  char *buf = NULL;
   int print = 1;
   int path_only = ctxt->state[1].set;
   int num_only = ctxt->state[2].set;
@@ -3013,61 +3018,34 @@ grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
                     &elemaddr, &elemsize, &desc, 0);
 
   if (err)
-    {
-      grub_btrfs_unmount(data);
-      return err;
-    }
-
-  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_REF || elemaddr == 0)
-    {
-      r = next(data, &desc, &elemaddr, &elemsize, &key_out);
-    }
-
-  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_REF) {
-    err = GRUB_ERR_FILE_NOT_FOUND;
-    grub_error(GRUB_ERR_FILE_NOT_FOUND, N_("can't find root refs"));
     goto out;
-  }
 
   do
     {
-      struct grub_btrfs_root_ref *ref;
       char *p = NULL;
+      grub_uint64_t id = key_out.offset;
 
-      if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_REF)
-        {
-          r = 0;
-          break;
-        }
+      if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_REF || elemaddr == 0)
+        continue;
 
-      if (elemsize > allocated)
-        {
-	  grub_size_t sz;
+      if (id == GRUB_BTRFS_ROOT_VOL_OBJECTID)
+        p = grub_strdup ("");
+      else
+        while (id != GRUB_BTRFS_ROOT_VOL_OBJECTID)
+          {
+            grub_uint64_t parent_id;
+            char *path_out;
 
-          grub_free(buf);
-
-	  if (grub_mul (elemsize, 2, &allocated) ||
-	      grub_add (allocated, 1, &sz))
-	    return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
-
-          buf = grub_malloc(sz);
-          if (!buf)
-            {
-              r = -grub_errno;
-              break;
-            }
-        }
-      ref = (struct grub_btrfs_root_ref *)buf;
-
-      err = grub_btrfs_read_logical(data, elemaddr, buf, elemsize, 0);
-      if (err)
-        {
-          r = -err;
-          break;
-        }
-        buf[elemsize] = 0;
-
-      find_pathname(data, ref->dirid, fs_root, ref->name, &p);
+            err = grub_btrfs_get_parent_subvol_path (data, grub_cpu_to_le64 (id), p, &parent_id, &path_out);
+            grub_free (p);
+            if (err)
+              {
+                grub_print_error ();
+                goto out;
+              }
+            p = path_out;
+            id = parent_id;
+          }
 
       if (print)
         {
@@ -3092,17 +3070,21 @@ grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
             grub_free(old);
         }
 
-      r = next(data, &desc, &elemaddr, &elemsize, &key_out);
-  } while(r > 0);
+      grub_free (p);
+
+  } while ((r = next(data, &desc, &elemaddr, &elemsize, &key_out)) > 0);
 
   if (output)
     grub_env_set(varname, output);
 
 out:
   free_iterator(&desc);
-  grub_btrfs_unmount(data);
 
-  grub_device_close (dev);
+  if (data)
+    grub_btrfs_unmount(data);
+
+  if (dev)
+    grub_device_close (dev);
 
   return 0;
 }
@@ -3126,7 +3108,7 @@ grub_btrfs_get_parent_subvol_path (struct grub_btrfs_data *data,
   grub_size_t elemsize;
   grub_disk_addr_t elemaddr;
   grub_err_t err;
-  char *parent_path;
+  char *parent_path = NULL;
   grub_size_t sz;
 
   *parent_id = 0;
