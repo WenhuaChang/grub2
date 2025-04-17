@@ -29,6 +29,9 @@
 #include <grub/charset.h>
 #include <grub/safemath.h>
 #include <grub/crypttab.h>
+#ifdef GRUB_MACHINE_IEEE1275
+#include <grub/ieee1275/ieee1275.h>
+#endif
 
 enum update_mode
   {
@@ -78,6 +81,9 @@ struct screen
   int completion_shown;
 
   int submenu;
+#ifdef GRUB_MACHINE_IEEE1275
+  char *id;
+#endif
 
   struct per_term_screen *terms;
   unsigned nterms;
@@ -578,6 +584,9 @@ destroy_screen (struct screen *screen)
   grub_free (screen->killed_text);
   grub_free (screen->lines);
   grub_free (screen->terms);
+#ifdef GRUB_MACHINE_IEEE1275
+  grub_free (screen->id);
+#endif
   grub_free (screen);
 }
 
@@ -599,6 +608,11 @@ make_screen (grub_menu_entry_t entry)
   screen->lines = grub_malloc (sizeof (struct line));
   if (! screen->lines)
     goto fail;
+#ifdef GRUB_MACHINE_IEEE1275
+  screen->id = grub_strdup (entry->id);
+  if (! screen->id)
+    goto fail;
+#endif
 
   /* Initialize the first line which must be always present.  */
   if (! init_line (screen, screen->lines))
@@ -1215,14 +1229,64 @@ run (struct screen *screen)
     script[size] = '\0';
   }
   grub_script_execute_new_scope (script, 0, dummy);
-  grub_free (script);
 
   if (errs_before != grub_err_printed_errors)
     grub_wait_after_message ();
 
   if (grub_errno == GRUB_ERR_NONE && grub_loader_is_loaded ())
-    /* Implicit execution of boot, only if something is loaded.  */
-    grub_command_execute ("boot", 0, 0);
+    {
+#ifdef GRUB_MACHINE_IEEE1275
+      char *entry_data = NULL;
+      const char *chosen;
+      const char *ptr;
+      grub_size_t sz = 0;
+      char *buf = NULL;
+      char *optr;
+
+      chosen = grub_env_get ("chosen") ? : "";
+      for (ptr = screen->id; *ptr; ptr++)
+	sz += (*ptr == '>') ? 2 : 1;
+      sz++;
+      sz += grub_strlen (chosen);
+      sz++;
+      buf = grub_malloc (sz);
+      if (!buf)
+	{
+	  grub_print_error ();
+	  goto exec_boot;
+	}
+      optr = buf;
+      if (*chosen != '\0')
+	{
+	  optr = grub_stpcpy (optr, chosen);
+	  *optr++ = '>';
+	}
+      for (ptr = screen->id; *ptr; ptr++)
+	{
+	  if (*ptr == '>')
+	    *optr++ = '>';
+	  *optr++ = *ptr;
+	}
+      *optr = 0;
+      entry_data = grub_xasprintf ("%s^%s", buf, script);
+      if (entry_data)
+	grub_ieee1275_set_boot_last_label (entry_data);
+      else
+	grub_print_error ();
+      grub_free (entry_data);
+      grub_free (buf);
+      grub_free (script);
+      script = NULL;
+ exec_boot:
+#endif
+      /* Implicit execution of boot, only if something is loaded.  */
+      grub_command_execute ("boot", 0, 0);
+#ifdef GRUB_MACHINE_IEEE1275
+      grub_ieee1275_set_boot_last_label ("");
+#endif
+    }
+
+  grub_free (script);
 
   if (screen->submenu)
     {
