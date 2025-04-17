@@ -33,6 +33,9 @@
 #include <grub/gfxterm.h>
 #include <grub/dl.h>
 #include <grub/safemath.h>
+#ifdef GRUB_MACHINE_IEEE1275
+#include <grub/ieee1275/ieee1275.h>
+#endif
 
 /* Time to delay after displaying an error message about a default/fallback
    entry failing to boot.  */
@@ -318,8 +321,31 @@ grub_menu_execute_entry(grub_menu_entry_t entry, int auto_boot)
     grub_env_set ("default", ptr + 1);
   else
     grub_env_unset ("default");
+#ifdef GRUB_MACHINE_IEEE1275
+  char *cas_entry_id = NULL;
+  char *cas_entry_source;
+  const char *id;
+  const char *sourcecode = entry->sourcecode;
 
+  id = grub_env_get ("chosen") ? : "";
+
+  if (grub_ieee1275_cas_reboot (&cas_entry_id) != 0)
+    goto exec_new_scope;
+
+  if ((cas_entry_source = grub_strchr (cas_entry_id, '^')) != NULL)
+    *cas_entry_source++ = '\0';
+  else
+    goto exec_new_scope;
+
+  if (grub_strcmp (id, cas_entry_id) == 0)
+    sourcecode = cas_entry_source;
+
+ exec_new_scope:
+  grub_script_execute_new_scope (sourcecode, entry->argc, entry->args);
+  grub_free (cas_entry_id);
+#else
   grub_script_execute_new_scope (entry->sourcecode, entry->argc, entry->args);
+#endif
 
   if (errs_before != grub_err_printed_errors)
     grub_wait_after_message ();
@@ -327,8 +353,23 @@ grub_menu_execute_entry(grub_menu_entry_t entry, int auto_boot)
   errs_before = grub_err_printed_errors;
 
   if (grub_errno == GRUB_ERR_NONE && grub_loader_is_loaded ())
-    /* Implicit execution of boot, only if something is loaded.  */
-    grub_command_execute ("boot", 0, 0);
+    {
+#ifdef GRUB_MACHINE_IEEE1275
+      char *entry_data;
+
+      entry_data = grub_xasprintf ("%s^%s", id, sourcecode);
+      if (entry_data)
+	grub_ieee1275_set_boot_last_label (entry_data);
+      else
+	grub_print_error ();
+      grub_free (entry_data);
+#endif
+      /* Implicit execution of boot, only if something is loaded.  */
+      grub_command_execute ("boot", 0, 0);
+#ifdef GRUB_MACHINE_IEEE1275
+      grub_ieee1275_set_boot_last_label ("");
+#endif
+    }
 
   if (errs_before != grub_err_printed_errors)
     grub_wait_after_message ();
