@@ -365,21 +365,6 @@ grub_normal_execute (const char *config, int nested, int batch)
     {
       menu = read_config_file (config);
 
-#ifdef GRUB_MACHINE_IEEE1275
-      int boot;
-      boot = 0;
-      char *script = NULL;
-      char *dummy[1] = { NULL };
-      if (! grub_ieee1275_cas_reboot (&script) && script)
-        {
-          if (! grub_script_execute_new_scope (script, 0, dummy))
-            boot = 1;
-        }
-      grub_free (script);
-      if (boot)
-        grub_command_execute ("boot", 0, 0);
-#endif
-
       /* Ignore any error.  */
       grub_errno = GRUB_ERR_NONE;
     }
@@ -393,7 +378,50 @@ grub_normal_execute (const char *config, int nested, int batch)
     {
       if (menu && menu->size)
 	{
+#ifdef GRUB_MACHINE_IEEE1275
+	  char *entry_id = NULL;
+	  char *delim;
+	  const char *chosen;
 
+	  if (grub_ieee1275_cas_reboot (&entry_id) != 0)
+	    goto enter_menu;
+
+	  if ((delim = grub_strchr (entry_id, '^')) != NULL)
+	    *delim = '\0';
+	  else
+	    goto enter_menu;
+
+	  chosen = grub_env_get ("chosen") ? : "";
+	  if (! grub_strlen (chosen))
+	    {
+	      grub_env_set ("default", entry_id);
+	      grub_env_set ("timeout", "0");
+	    }
+	  else
+	    {
+	      delim = entry_id;
+	      while ((delim = grub_strchr (delim, '>')) != NULL)
+		{
+		  if (delim[1] == '>')
+		    {
+		      delim += 2;
+		      continue;
+		    }
+		  *delim = '\0';
+		  if (grub_strcmp (chosen, entry_id) == 0)
+		    {
+		      grub_env_set ("default", delim + 1);
+		      grub_env_set ("timeout", "0");
+		      break;
+		    }
+		  *delim++ = '>';
+		}
+	      if (delim == NULL)
+		grub_dprintf ("normal", "CAS triggered but find no match: %s\n", entry_id);
+	    }
+ enter_menu:
+	  grub_free (entry_id);
+#endif
 	  grub_boot_time ("Entering menu");
 	  grub_show_menu (menu, nested, 0);
 	  if (nested)
