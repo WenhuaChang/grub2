@@ -190,8 +190,8 @@ free_params (void)
     }
 }
 
-grub_err_t
-grub_arch_efi_linux_boot_image (grub_addr_t addr,
+static grub_err_t
+grub_arm64_efi_linux_boot_image (grub_addr_t addr,
 			        grub_size_t size __attribute__ ((unused)),
 			        char *args)
 {
@@ -213,7 +213,7 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr,
 static grub_err_t
 grub_linux_boot (void)
 {
-  return (grub_arch_efi_linux_boot_image ((grub_addr_t)kernel_addr, kernel_size, linux_args));
+  return (grub_arm64_efi_linux_boot_image ((grub_addr_t)kernel_addr, kernel_size, linux_args));
 }
 
 static grub_err_t
@@ -464,20 +464,8 @@ fail:
   return grub_errno;
 }
 
+extern grub_err_t __attribute__((alias("grub_cmd_linux")))
+grub_cmd_linux_efi_fallback (grub_command_t cmd, int argc, char *argv[]);
 
-static grub_command_t cmd_linux, cmd_initrd;
-
-GRUB_MOD_INIT (linux)
-{
-  cmd_linux = grub_register_command ("linux", grub_cmd_linux, 0,
-				     N_("Load Linux."));
-  cmd_initrd = grub_register_command ("initrd", grub_cmd_initrd, 0,
-				      N_("Load initrd."));
-  my_mod = mod;
-}
-
-GRUB_MOD_FINI (linux)
-{
-  grub_unregister_command (cmd_linux);
-  grub_unregister_command (cmd_initrd);
-}
+extern grub_err_t __attribute__((alias("grub_cmd_initrd")))
+grub_cmd_initrd_efi_fallback (grub_command_t cmd, int argc, char *argv[]);
