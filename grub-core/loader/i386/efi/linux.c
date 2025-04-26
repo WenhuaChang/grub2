@@ -421,30 +421,8 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   return grub_errno;
 }
 
-static grub_command_t cmd_linux, cmd_initrd;
-static grub_command_t cmd_linuxefi, cmd_initrdefi;
+extern grub_err_t __attribute__((alias("grub_cmd_linux")))
+grub_cmd_linux_efi_fallback (grub_command_t cmd, int argc, char *argv[]);
 
-GRUB_MOD_INIT(linux)
-{
-  cmd_linuxefi =
-    grub_register_command ("linuxefi", grub_cmd_linux,
-                           0, N_("Load Linux."));
-  cmd_initrdefi =
-    grub_register_command ("initrdefi", grub_cmd_initrd,
-                           0, N_("Load initrd."));
-  cmd_linux =
-    grub_register_command ("linux", grub_cmd_linux,
-                           0, N_("Load Linux."));
-  cmd_initrd =
-    grub_register_command ("initrd", grub_cmd_initrd,
-                           0, N_("Load initrd."));
-  my_mod = mod;
-}
-
-GRUB_MOD_FINI(linux)
-{
-  grub_unregister_command (cmd_linuxefi);
-  grub_unregister_command (cmd_initrdefi);
-  grub_unregister_command (cmd_linux);
-  grub_unregister_command (cmd_initrd);
-}
+extern grub_err_t __attribute__((alias("grub_cmd_initrd")))
+grub_cmd_initrd_efi_fallback (grub_command_t cmd, int argc, char *argv[]);

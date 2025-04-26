@@ -79,10 +79,10 @@ static initrd_media_device_path_t initrd_lf2_device_path = {
 };
 
 extern grub_err_t
-grub_cmd_linux_x86_legacy (grub_command_t cmd, int argc, char *argv[]);
+grub_cmd_linux_efi_fallback (grub_command_t cmd, int argc, char *argv[]);
 
 extern grub_err_t
-grub_cmd_initrd_x86_legacy (grub_command_t cmd, int argc, char *argv[]);
+grub_cmd_initrd_efi_fallback (grub_command_t cmd, int argc, char *argv[]);
 
 static grub_efi_status_t __grub_efi_api
 grub_efi_initrd_load_file2 (grub_efi_load_file2_t *this,
@@ -403,8 +403,9 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
     }
 
 #if defined(__i386__) || defined(__x86_64__)
-  if (!initrd_use_loadfile2)
-    return grub_cmd_initrd_x86_legacy (cmd, argc, argv);
+  if (grub_is_using_legacy_shim_lock_protocol () == true ||
+      !initrd_use_loadfile2)
+    return grub_cmd_initrd_efi_fallback (cmd, argc, argv);
 #endif
 
   if (!loaded)
@@ -488,7 +489,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
 #if defined(__i386__) || defined(__x86_64__)
       grub_dprintf ("linux", "using legacy shim_lock protocol, falling back to legacy Linux kernel loader\n");
 
-      err = grub_cmd_linux_x86_legacy (cmd, argc, argv);
+      err = grub_cmd_linux_efi_fallback (cmd, argc, argv);
 
       if (err == GRUB_ERR_NONE)
 	return GRUB_ERR_NONE;
@@ -529,7 +530,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        */
 fallback:
       grub_file_close (file);
-      return grub_cmd_linux_x86_legacy (cmd, argc, argv);
+      return grub_cmd_linux_efi_fallback (cmd, argc, argv);
     }
 #endif
 
