@@ -394,7 +394,7 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
       goto fail;
     }
 
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__) || defined(__aarch64__)
   if (grub_is_using_legacy_shim_lock_protocol () == true ||
       !initrd_use_loadfile2)
     return grub_cmd_initrd_efi_fallback (cmd, argc, argv);
@@ -478,7 +478,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
 
   if (grub_is_using_legacy_shim_lock_protocol () == true)
     {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__) || defined (__aarch64__)
       grub_dprintf ("linux", "using legacy shim_lock protocol, falling back to legacy Linux kernel loader\n");
 
       err = grub_cmd_linux_efi_fallback (cmd, argc, argv);
@@ -507,7 +507,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   kernel_size = grub_file_size (file);
 
   if (grub_arch_efi_linux_load_image_header (file, &lh) != GRUB_ERR_NONE)
-#if !defined(__i386__) && !defined(__x86_64__)
+#if !defined(__i386__) && !defined(__x86_64__) && !defined (__aarch64__)
     goto fail;
 #else
     goto fallback;
