@@ -801,10 +801,14 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
 
 #ifdef SUPPORT_SECURE_BOOT
   /* FIXME is secure boot possible also with universal binaries? */
-  if (debug_secureboot || (grub_efi_get_secureboot () == GRUB_EFI_SECUREBOOT_MODE_ENABLED && grub_secure_validate ((void *)address, size)))
+  if (debug_secureboot ||
+      (grub_efi_get_secureboot () == GRUB_EFI_SECUREBOOT_MODE_ENABLED &&
+       grub_is_using_legacy_shim_lock_protocol () == true &&
+       grub_secure_validate ((void *)address, size)))
     {
       struct grub_secureboot_chainloader_context *sb_context;
 
+      grub_dprintf ("chain", "Falling back to PE loader\n");
       sb_context = grub_malloc (sizeof (*sb_context));
       if (!sb_context)
 	goto fail;
