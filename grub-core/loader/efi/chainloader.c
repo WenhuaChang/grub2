@@ -222,6 +222,29 @@ make_file_path (grub_efi_device_path_t *dp, const char *filename)
   return file_path;
 }
 
+static grub_efi_device_path_t *
+grub_efi_get_media_file_path (grub_efi_device_path_t *dp)
+{
+  while (1)
+    {
+      grub_efi_uint8_t type;
+      grub_efi_uint8_t subtype;
+
+      if (GRUB_EFI_END_ENTIRE_DEVICE_PATH (dp))
+        break;
+
+      type = GRUB_EFI_DEVICE_PATH_TYPE (dp);
+      subtype = GRUB_EFI_DEVICE_PATH_SUBTYPE (dp);
+
+      if (type == GRUB_EFI_MEDIA_DEVICE_PATH_TYPE && subtype == GRUB_EFI_FILE_PATH_DEVICE_PATH_SUBTYPE)
+	return dp;
+
+      dp = GRUB_EFI_NEXT_DEVICE_PATH (dp);
+    }
+
+  return NULL;
+}
+
 #ifdef SUPPORT_SECURE_BOOT
 #define SHIM_LOCK_GUID \
   { 0x605dab50, 0xe046, 0x4300, {0xab, 0xb6, 0x3d, 0xd8, 0x10, 0xdd, 0x8b, 0x23} }
@@ -459,29 +482,6 @@ relocate_coff (pe_coff_loader_image_context_t *context, void *data)
     }
 
   return GRUB_EFI_SUCCESS;
-}
-
-static grub_efi_device_path_t *
-grub_efi_get_media_file_path (grub_efi_device_path_t *dp)
-{
-  while (1)
-    {
-      grub_efi_uint8_t type;
-      grub_efi_uint8_t subtype; 
-
-      if (GRUB_EFI_END_ENTIRE_DEVICE_PATH (dp))
-        break;
-
-      type = GRUB_EFI_DEVICE_PATH_TYPE (dp);
-      subtype = GRUB_EFI_DEVICE_PATH_SUBTYPE (dp);
-
-      if (type == GRUB_EFI_MEDIA_DEVICE_PATH_TYPE && subtype == GRUB_EFI_FILE_PATH_DEVICE_PATH_SUBTYPE)
-	return dp;
-
-      dp = GRUB_EFI_NEXT_DEVICE_PATH (dp);
-    }
-
-  return NULL;
 }
 
 static grub_efi_boolean_t
@@ -880,6 +880,12 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
       goto fail;
     }
   loaded_image->device_handle = dev_handle;
+
+  if (! loaded_image->file_path)
+    {
+      grub_dprintf ("chain", "bailout file_path\n");
+      loaded_image->file_path = grub_efi_get_media_file_path (file_path);
+    }
 
   /* Build load options with arguments from chainloader command line. */
   if (cmdline)
