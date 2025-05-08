@@ -1251,6 +1251,7 @@ grub_cryptodisk_scan_device_real (const char *name,
 #endif
   if (askpass)
     {
+      grub_memset (cargs->key_data, 0, cargs->key_len);
       cargs->key_len = 0;
       grub_free (cargs->key_data);
     }
