@@ -28,6 +28,8 @@
 #include <dirent.h>
 #include <string.h>
 #include <errno.h>
+#include <grub/util/ofpath.h>
+#define BOOTDEV_BUFFER  1000
 
 static char *
 get_ofpathname (const char *dev)
@@ -203,6 +205,105 @@ grub_install_register_efi (const grub_disk_t *efidir_grub_disk,
   return 0;
 }
 
+
+char *
+add_multiple_nvme_bootdevices (const char *install_device)
+{
+  char *sysfs_path, *nvme_ns, *ptr, *non_splitter_path;
+  unsigned int nsid;
+  char *multipath_boot, *ofpath, *ext_dir;
+  struct dirent *ep, *splitter_ep;
+  DIR *dp, *splitter_dp;
+  char *cntl_id, *dirR1, *dirR2, *splitter_info_path;
+  int is_FC = 0, is_splitter = 0;
+
+  nvme_ns = grub_strstr (install_device, "nvme");
+  nsid = of_path_get_nvme_nsid (nvme_ns);
+  if (nsid == 0)
+    return NULL;
+
+  sysfs_path = nvme_get_syspath (nvme_ns);
+  ofpath = xasprintf ("%s",get_ofpathname (nvme_ns));
+
+  if (grub_strstr (ofpath, "fibre-channel"))
+    {
+      strcat (sysfs_path, "/device");
+      is_FC = 1;
+    }
+  else
+    {
+      strcat (sysfs_path, "/subsystem");
+      is_FC = 0;
+    }
+  if (is_FC == 0)
+    {
+      cntl_id = grub_strstr (nvme_ns, "e");
+      dirR1 = xasprintf ("nvme%c",cntl_id[1]);
+
+      splitter_info_path = xasprintf ("%s%s%s", "/sys/block/", nvme_ns, "/device");
+      splitter_dp = opendir (splitter_info_path);
+      if (!splitter_dp)
+        return NULL;
+
+      while ((splitter_ep = readdir (splitter_dp)) != NULL)
+        {
+          if (grub_strstr (splitter_ep->d_name, "nvme"))
+	     {
+	       if (grub_strstr (splitter_ep->d_name, dirR1))
+	         continue;
+
+              ext_dir = grub_strstr (splitter_ep->d_name, "e");
+              if (!(grub_strstr (ext_dir, "n")))
+	         {
+                  dirR2 = xasprintf("%s", splitter_ep->d_name);
+	           is_splitter = 1;
+	           break;
+	         }
+	    }
+        }
+      closedir (splitter_dp);
+    }
+  sysfs_path = xrealpath (sysfs_path);
+  dp = opendir (sysfs_path);
+  if (!dp)
+    return NULL;
+
+  ptr = multipath_boot = xmalloc (BOOTDEV_BUFFER);
+  if (is_splitter == 0 && is_FC == 0)
+    {
+      non_splitter_path = xasprintf ("%s%s%x:1 ", get_ofpathname (dirR1), "/namespace@", nsid);
+      strncpy (ptr, non_splitter_path, strlen (non_splitter_path));
+      ptr += strlen (non_splitter_path);
+      free (non_splitter_path);
+    }
+  else
+    {
+      while ((ep = readdir (dp)) != NULL)
+        {
+          char *path;
+          if (grub_strstr (ep->d_name, "nvme"))
+            {
+              if (is_FC == 0 && !grub_strstr (ep->d_name, dirR1) && !grub_strstr (ep->d_name, dirR2))
+                continue;
+              path = xasprintf ("%s%s%x ", get_ofpathname (ep->d_name), "/namespace@", nsid);
+              if ((strlen (multipath_boot) + strlen (path)) > BOOTDEV_BUFFER)
+                {
+                  grub_util_warn (_("Maximum five entries are allowed in the bootlist"));
+                  free (path);
+                  break;
+                }
+              strncpy (ptr, path, strlen (path));
+              ptr += strlen (path);
+              free (path);
+            }
+        }
+    }
+  *--ptr = '\0';
+  closedir (dp);
+
+  return multipath_boot;
+}
+
 void
 grub_install_register_ieee1275 (int is_prep, const char *install_device,
 				int partno, const char *relpath)
@@ -242,8 +343,19 @@ grub_install_register_ieee1275 (int is_prep, const char *install_device,
 	}
       *ptr = '\0';
     }
+  else if (grub_strstr (install_device, "nvme"))
+    {
+      boot_device = add_multiple_nvme_bootdevices (install_device);
+    }
   else
-    boot_device = get_ofpathname (install_device);
+    {
+      boot_device = get_ofpathname (install_device);
+      if (grub_strstr (boot_device, "nvme-of"))
+        {
+          free (boot_device);
+          boot_device = add_multiple_nvme_bootdevices (install_device);
+        }
+    }
 
   if (grub_util_exec ((const char * []){ "nvsetenv", "boot-device",
 	  boot_device, NULL }))

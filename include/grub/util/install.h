@@ -223,6 +223,9 @@ grub_install_get_image_targets_string (void);
 const char *
 grub_util_get_target_dirname (const struct grub_install_image_target_desc *t);
 
+char *
+add_multiple_nvme_bootdevices (const char *install_device);
+
 void
 grub_install_create_envblk_file (const char *name);
 
