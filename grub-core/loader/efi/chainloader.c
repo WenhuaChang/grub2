@@ -33,6 +33,7 @@
 #include <grub/efi/efi.h>
 #include <grub/efi/disk.h>
 #include <grub/efi/memory.h>
+#include <grub/efi/sb.h>
 #include <grub/command.h>
 #include <grub/i18n.h>
 #include <grub/net.h>
@@ -824,41 +825,45 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
     }
 #endif
 
-  status = grub_efi_load_image (0, grub_efi_image_handle, file_path,
+  image_handle = grub_efi_get_last_verified_image_handle ();
+  if (image_handle == NULL)
+    {
+      status = grub_efi_load_image (0, grub_efi_image_handle, file_path,
 				boot_image, size, &image_handle);
 #ifdef SUPPORT_SECURE_BOOT
-  if (status == GRUB_EFI_SECURITY_VIOLATION && grub_efi_get_secureboot () != GRUB_EFI_SECUREBOOT_MODE_ENABLED)
-    {
-      /* If it failed with security violation while not in secure boot mode,
-         the firmware might be broken. We try to workaround on that by forcing
-         the SB method! (bsc#887793) */
-      struct grub_secureboot_chainloader_context *sb_context;
+      if (status == GRUB_EFI_SECURITY_VIOLATION && grub_efi_get_secureboot () != GRUB_EFI_SECUREBOOT_MODE_ENABLED)
+	{
+	  /* If it failed with security violation while not in secure boot mode,
+	     the firmware might be broken. We try to workaround on that by forcing
+	     the SB method! (bsc#887793) */
+	  struct grub_secureboot_chainloader_context *sb_context;
 
-      grub_dprintf ("chain", "Possible firmware flaw! Security violation while not in secure boot mode.\n");
-      sb_context = grub_malloc (sizeof (*sb_context));
-      if (!sb_context)
-	goto fail;
-      sb_context->cmdline = cmdline;
-      sb_context->cmdline_len = cmdline_len;
-      sb_context->fsize = size;
-      sb_context->dev_handle = dev_handle;
-      sb_context->address = address;
-      sb_context->pages = pages;
-      sb_context->file_path = file_path;
-      grub_file_close (file);
-      grub_loader_set_ex (grub_secureboot_chainloader_boot,
-	      grub_secureboot_chainloader_unload, sb_context, 0);
-      return 0;
-    }
+	  grub_dprintf ("chain", "Possible firmware flaw! Security violation while not in secure boot mode.\n");
+	  sb_context = grub_malloc (sizeof (*sb_context));
+	  if (!sb_context)
+	    goto fail;
+	  sb_context->cmdline = cmdline;
+	  sb_context->cmdline_len = cmdline_len;
+	  sb_context->fsize = size;
+	  sb_context->dev_handle = dev_handle;
+	  sb_context->address = address;
+	  sb_context->pages = pages;
+	  sb_context->file_path = file_path;
+	  grub_file_close (file);
+	  grub_loader_set_ex (grub_secureboot_chainloader_boot,
+		  grub_secureboot_chainloader_unload, sb_context, 0);
+	  return 0;
+	}
 #endif
-  if (status != GRUB_EFI_SUCCESS)
-    {
-      if (status == GRUB_EFI_OUT_OF_RESOURCES)
-	grub_error (GRUB_ERR_OUT_OF_MEMORY, "out of resources");
-      else
-	grub_error (GRUB_ERR_BAD_OS, "cannot load image");
+      if (status != GRUB_EFI_SUCCESS)
+	{
+	  if (status == GRUB_EFI_OUT_OF_RESOURCES)
+	    grub_error (GRUB_ERR_OUT_OF_MEMORY, "out of resources");
+	  else
+	    grub_error (GRUB_ERR_BAD_OS, "cannot load image");
 
-      goto fail;
+	  goto fail;
+	}
     }
 
   /* LoadImage does not set a device handler when the image is
