@@ -64,14 +64,12 @@ grub_chainloader_unload (void *context)
 {
   grub_efi_handle_t image_handle = (grub_efi_handle_t) context;
   grub_efi_loaded_image_t *loaded_image;
-  grub_efi_boot_services_t *b;
 
   loaded_image = grub_efi_get_loaded_image (image_handle);
   if (loaded_image != NULL)
     grub_free (loaded_image->load_options);
 
-  b = grub_efi_system_table->boot_services;
-  b->unload_image (image_handle);
+  grub_efi_unload_image (image_handle);
 
   grub_dl_unref (my_mod);
   return GRUB_ERR_NONE;
@@ -87,7 +85,7 @@ grub_chainloader_boot (void *context)
   grub_efi_char16_t *exit_data = NULL;
 
   b = grub_efi_system_table->boot_services;
-  status = b->start_image (image_handle, &exit_data_size, &exit_data);
+  status = grub_efi_start_image (image_handle, &exit_data_size, &exit_data);
   if (status != GRUB_EFI_SUCCESS)
     {
       if (exit_data)
@@ -826,9 +824,8 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
     }
 #endif
 
-  status = b->load_image (0, grub_efi_image_handle, file_path,
-			  boot_image, size,
-			  &image_handle);
+  status = grub_efi_load_image (0, grub_efi_image_handle, file_path,
+				boot_image, size, &image_handle);
 #ifdef SUPPORT_SECURE_BOOT
   if (status == GRUB_EFI_SECURITY_VIOLATION && grub_efi_get_secureboot () != GRUB_EFI_SECUREBOOT_MODE_ENABLED)
     {
@@ -907,7 +904,7 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
     b->free_pages (address, pages);
 
   if (image_handle != NULL)
-    b->unload_image (image_handle);
+    grub_efi_unload_image (image_handle);
 
   grub_dl_unref (my_mod);
 
