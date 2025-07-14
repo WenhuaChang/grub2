@@ -125,6 +125,7 @@ parse_line (grub_file_t file, http_data_t data, char *ptr, grub_size_t len)
 	case 404:
 	  data->err = GRUB_ERR_FILE_NOT_FOUND;
 	  data->errmsg = grub_xasprintf (_("file `%s' not found"), data->filename);
+	  data->first_line_recv = 1;
 	  return GRUB_ERR_NONE;
 	default:
 	  data->err = GRUB_ERR_NET_UNKNOWN_ERROR;
@@ -132,6 +133,7 @@ parse_line (grub_file_t file, http_data_t data, char *ptr, grub_size_t len)
 	     valid answers like 403 will trigger this very generic message.  */
 	  data->errmsg = grub_xasprintf (_("unsupported HTTP error %d: %s"),
 					 code, ptr);
+	  data->first_line_recv = 1;
 	  return GRUB_ERR_NONE;
 	}
       data->first_line_recv = 1;
@@ -444,6 +446,10 @@ http_establish (struct grub_file *file, grub_off_t offset, int initial)
 	}
       return grub_error (GRUB_ERR_TIMEOUT, N_("time out opening `%s'"), data->filename);
     }
+
+  if (data->err)
+    return grub_error (data->err, N_("%s"), data->errmsg);
+
   return GRUB_ERR_NONE;
 }
 
