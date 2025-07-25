@@ -437,19 +437,28 @@ grub_crypto_gcry_error (gcry_err_code_t in)
   return GRUB_ACCESS_DENIED;
 }
 
+/*
+ * Compare byte arrays of length LEN, return 1 if it's not same,
+ * 0, otherwise.
+ */
 int
-grub_crypto_memcmp (const void *a, const void *b, grub_size_t n)
+grub_crypto_memcmp (const void *b1, const void *b2, grub_size_t len)
 {
-  register grub_size_t counter = 0;
-  const grub_uint8_t *pa, *pb;
+  const grub_uint8_t *a = b1;
+  const grub_uint8_t *b = b2;
+  int ab, ba;
+  grub_size_t i;
 
-  for (pa = a, pb = b; n; pa++, pb++, n--)
+  /* Constant-time compare. */
+  for (i = 0, ab = 0, ba = 0; i < len; i++)
     {
-      if (*pa != *pb)
-	counter++;
+      /* If a[i] != b[i], either ab or ba will be negative. */
+      ab |= a[i] - b[i];
+      ba |= b[i] - a[i];
     }
 
-  return !!counter;
+  /* 'ab | ba' is negative when buffers are not equal, extract sign bit.  */
+  return ((unsigned int)(ab | ba) >> (sizeof(unsigned int) * 8 - 1)) & 1;
 }
 
 #ifndef GRUB_UTIL
