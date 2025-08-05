@@ -855,6 +855,7 @@ static void create_entry (struct bls_entry *entry)
   const char **argv = NULL;
 
   char *title = NULL;
+  char *version = NULL;
   char *clinux = NULL;
   char *options = NULL;
   char **initrds = NULL;
@@ -898,7 +899,9 @@ static void create_entry (struct bls_entry *entry)
   if (dotconf)
     dotconf[0] = '\0';
 
-  title = bls_get_val (entry, "title", NULL);
+  title = grub_strdup(bls_get_val (entry, "title", NULL));
+  version = bls_get_val (entry, "version", NULL);
+  title = version ? grub_xasprintf("%s (%s)", title, version) : title;
   options = expand_val (bls_get_val (entry, "options", NULL));
 
   if (!options)
@@ -1085,6 +1088,7 @@ finish:
   grub_free (devicetree);
   grub_free (initrds);
   grub_free (options);
+  grub_free (title);
   grub_free (classes);
   grub_free (args);
   grub_free (argv);
