@@ -2606,6 +2606,7 @@ module = {
   common = commands/tpm.c;
   efi = commands/efi/tpm.c;
   enable = efi;
+  cppflags = '-I$(srcdir)/lib/tss2';
 };
 
 module = {
