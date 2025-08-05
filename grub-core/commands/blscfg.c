@@ -836,6 +836,8 @@ static void create_entry (struct bls_entry *entry)
   int i, index;
   bool add_dt_prefix = false;
 
+  char *bumpcounter = NULL;
+
   grub_dprintf("blscfg", "%s got here\n", __func__);
   clinux = bls_get_val (entry, "linux", NULL);
   if (!clinux)
@@ -994,6 +996,19 @@ static void create_entry (struct bls_entry *entry)
       grub_free(prefix);
     }
 
+  /* "bls_bumpcounter " + id + "\n" */
+  int bumpcounter_size = sizeof("bls_bumpcounter ") + grub_strlen(id) + 1;
+  bumpcounter = grub_malloc(bumpcounter_size);
+  if (!bumpcounter)
+  {
+    grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
+    goto finish;
+  }
+  char *tmp = bumpcounter;
+  tmp = grub_stpcpy(tmp, "bls_bumpcounter ");
+  tmp = grub_stpcpy(tmp, id);
+  tmp = grub_stpcpy(tmp, "\n");
+
   grub_dprintf ("blscfg2", "devicetree %s for id:\"%s\"\n", dt, id);
 
   const char *sdval = grub_env_get("save_default");
@@ -1006,7 +1021,7 @@ static void create_entry (struct bls_entry *entry)
 			"insmod gzio\n"
 			"linux %s%s%s%s\n"
 #endif
-			"%s%s",
+			"%s%s%s",
 			savedefault ? "savedefault\n" : "",
 #ifdef GRUB_MACHINE_EMU
 			separate_boot ? GRUB_BOOT_DEVICE : "",
@@ -1014,7 +1029,8 @@ static void create_entry (struct bls_entry *entry)
 			bootdev,
 #endif
 			clinux, options ? " " : "", options ? options : "",
-			initrd ? initrd : "", dt ? dt : "");
+			bumpcounter ? bumpcounter : "", initrd ? initrd : "",
+			dt ? dt : "");
 
   grub_normal_add_menu_entry (argc, argv, classes, id, users, hotkey, NULL, src, 0, 0, &index, entry);
   grub_dprintf ("blscfg", "Added entry %d id:\"%s\"\n", index, id);
@@ -1032,6 +1048,7 @@ finish:
   grub_free (argv);
   grub_free (src);
   grub_free (bootdev);
+  grub_free (bumpcounter);
 }
 
 struct find_entry_info {
