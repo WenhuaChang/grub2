@@ -250,14 +250,15 @@ struct linux_kernel_params
   grub_uint32_t ext_ramdisk_size;	/* 0xc4 */
   grub_uint32_t ext_cmd_line_ptr;	/* 0xc8 */
 
-  grub_uint8_t padding7[0x1b8 - 0xcc];
+  grub_uint8_t padding7[0x140 - 0xcc];
 
   union
     {
       struct
         {
+          grub_uint8_t padding7_1[0x1b8 - 0x140];
           grub_uint32_t efi_system_table;	/* 1b8 */
-          grub_uint32_t padding7_1;		/* 1bc */
+          grub_uint32_t padding7_2;		/* 1bc */
           grub_uint32_t efi_signature;		/* 1c0 */
           grub_uint32_t efi_mem_desc_size;	/* 1c4 */
           grub_uint32_t efi_mem_desc_version;	/* 1c8 */
@@ -266,8 +267,7 @@ struct linux_kernel_params
         } v0204;
       struct
         {
-          grub_uint32_t padding7_1;		/* 1b8 */
-          grub_uint32_t padding7_2;		/* 1bc */
+          grub_uint8_t edid_info[128];  	/* 140 */
           grub_uint32_t efi_signature;		/* 1c0 */
           grub_uint32_t efi_system_table;	/* 1c4 */
           grub_uint32_t efi_mem_desc_size;	/* 1c8 */
@@ -277,8 +277,7 @@ struct linux_kernel_params
 	} v0206;
       struct
         {
-          grub_uint32_t padding7_1;		/* 1b8 */
-          grub_uint32_t padding7_2;		/* 1bc */
+          grub_uint8_t edid_info[128];  	/* 140 */
           grub_uint32_t efi_signature;		/* 1c0 */
           grub_uint32_t efi_system_table;	/* 1c4 */
           grub_uint32_t efi_mem_desc_size;	/* 1c8 */
