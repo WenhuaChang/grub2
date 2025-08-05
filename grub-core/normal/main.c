@@ -356,7 +356,6 @@ grub_normal_execute (const char *config, int nested, int batch)
       /* Ignore any error.  */
       grub_errno = GRUB_ERR_NONE;
       /* unset to let configfile and source commands continue to work */
-      grub_env_unset ("enable_blscfg");
       goto check_batch;
     }
 #endif
