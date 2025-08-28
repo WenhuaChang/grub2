@@ -384,12 +384,31 @@ write_envblk_fs (grub_envblk_t envblk)
   fclose (fp);
 }
 
+struct var_lookup_ctx {
+  const char *varname;
+  int found;
+};
+
+static int
+var_lookup_iter (const char *varname, const char *value __attribute__ ((unused)), void *hook_data)
+{
+  struct var_lookup_ctx *ctx = (struct var_lookup_ctx *)hook_data;
+  if (grub_strcmp (ctx->varname, varname) == 0)
+    {
+      ctx->found = 1;
+      return 1;
+    }
+  return 0;
+}
+
 static void
 set_variables (const char *name, int argc, char *argv[])
 {
   grub_envblk_t envblk;
+  grub_envblk_t envblk_fs;
 
   envblk = open_envblk_file (name);
+  envblk_fs = open_envblk_fs (envblk);
   while (argc)
     {
       char *p;
@@ -401,25 +420,31 @@ set_variables (const char *name, int argc, char *argv[])
       *(p++) = 0;
 
       if ((strcmp (argv[0], "next_entry") == 0 ||
-	  strcmp (argv[0], "health_checker_flag") == 0) && fs_envblk)
+	  strcmp (argv[0], "health_checker_flag") == 0) && envblk_fs)
 	{
-	  grub_envblk_t envblk_fs;
-	  envblk_fs = open_envblk_fs (envblk);
-	  if (!envblk_fs)
-	    grub_util_error ("%s", _("can't open fs environment block"));
 	  if (! grub_envblk_set (envblk_fs, argv[0], p))
 	    grub_util_error ("%s", _("environment block too small"));
-	  write_envblk_fs (envblk_fs);
-	  grub_envblk_close (envblk_fs);
 	}
       else if (strcmp (argv[0], "env_block") == 0)
 	{
-	  grub_util_warn ("can't set env_block as it's read-only");
+	  grub_util_warn (_("can't set env_block as it's read-only"));
 	}
       else
 	{
 	  if (! grub_envblk_set (envblk, argv[0], p))
 	    grub_util_error ("%s", _("environment block too small"));
+
+	  if (envblk_fs)
+	    {
+	      struct var_lookup_ctx ctx = {
+		.varname = argv[0],
+		.found = 0
+	      };
+
+	      grub_envblk_iterate (envblk_fs, &ctx, var_lookup_iter);
+	      if (ctx.found)
+		grub_envblk_delete (envblk_fs, argv[0]);
+	    }
 	}
 
       argc--;
@@ -429,6 +454,11 @@ set_variables (const char *name, int argc, char *argv[])
   write_envblk (name, envblk);
   grub_envblk_close (envblk);
 
+  if (envblk_fs)
+    {
+      write_envblk_fs (envblk_fs);
+      grub_envblk_close (envblk_fs);
+    }
 }
 
 static void
