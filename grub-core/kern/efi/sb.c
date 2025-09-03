@@ -45,7 +45,7 @@ static grub_efi_handle_t last_verified_image_handle = NULL;
  * drivers/firmware/efi/libstub/secureboot.c:efi_get_secureboot().
  */
 grub_uint8_t
-grub_efi_get_secureboot (void)
+grub_efi_get_secureboot_real (grub_uint8_t skip_moksbstate)
 {
   static grub_guid_t efi_variable_guid = GRUB_EFI_GLOBAL_VARIABLE_GUID;
   grub_efi_status_t status;
@@ -78,6 +78,12 @@ grub_efi_get_secureboot (void)
   if ((*secboot == 0) || (*setupmode == 1))
     {
       secureboot = GRUB_EFI_SECUREBOOT_MODE_DISABLED;
+      goto out;
+    }
+
+  if (skip_moksbstate)
+    {
+      secureboot = GRUB_EFI_SECUREBOOT_MODE_ENABLED;
       goto out;
     }
 
@@ -114,7 +120,7 @@ grub_efi_get_secureboot (void)
   else if (secureboot == GRUB_EFI_SECUREBOOT_MODE_ENABLED)
     secureboot_str = "Enabled";
 
-  grub_dprintf ("efi", "UEFI Secure Boot state: %s\n", secureboot_str);
+  grub_dprintf ("efi", "UEFI Secure Boot state with%s MokSBState: %s\n", skip_moksbstate ? "out" : "", secureboot_str);
 
   return secureboot;
 }
@@ -227,7 +233,7 @@ grub_shim_lock_verifier_setup (void)
   struct grub_module_header *header;
 
   /* Secure Boot is off. Ignore shim. */
-  if (grub_efi_get_secureboot () != GRUB_EFI_SECUREBOOT_MODE_ENABLED)
+  if (grub_efi_get_secureboot_real (1) != GRUB_EFI_SECUREBOOT_MODE_ENABLED)
     return;
 
   /* Find both shim protocols. */
