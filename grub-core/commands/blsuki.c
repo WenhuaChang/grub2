@@ -1044,6 +1044,8 @@ bls_create_entry (grub_blsuki_entry_t *entry)
   grub_size_t size;
   bool blsuki_save_default;
 
+  char *bumpcounter = NULL;
+
   linux_path = blsuki_get_val (entry, "linux", NULL);
   if (linux_path == NULL)
     {
@@ -1089,10 +1091,23 @@ bls_create_entry (grub_blsuki_entry_t *entry)
   if (grub_errno != GRUB_ERR_NONE)
     goto finish;
 
+  /* "bls_bumpcounter " + id + "\n" */
+  int bumpcounter_size = sizeof("bls_bumpcounter ") + grub_strlen(id) + 1;
+  bumpcounter = grub_malloc(bumpcounter_size);
+  if (!bumpcounter)
+  {
+    grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
+    goto finish;
+  }
+  char *tmp = bumpcounter;
+  tmp = grub_stpcpy(tmp, "bls_bumpcounter ");
+  tmp = grub_stpcpy(tmp, id);
+  tmp = grub_stpcpy(tmp, "\n");
+
   blsuki_save_default = grub_env_get_bool ("blsuki_save_default", false);
-  src = grub_xasprintf ("%s%s%s%s",
+  src = grub_xasprintf ("%s%s%s%s%s",
 			blsuki_save_default ? "savedefault\n" : "",
-			linux_cmd, initrd_cmd ? initrd_cmd : "",
+			linux_cmd, bumpcounter ? bumpcounter : "", initrd_cmd ? initrd_cmd : "",
 			dt_cmd ? dt_cmd : "");
 
   grub_normal_add_menu_entry (argc, argv, classes, id, users, hotkey, NULL, src, 0, entry, 0);
@@ -1105,6 +1120,7 @@ bls_create_entry (grub_blsuki_entry_t *entry)
   grub_free (args);
   grub_free (argv);
   grub_free (src);
+  grub_free (bumpcounter);
 }
 
 #ifdef GRUB_MACHINE_EFI
