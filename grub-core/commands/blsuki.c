@@ -45,6 +45,14 @@
 #define GRUB_BOOT_DEVICE ""
 #endif
 
+#ifdef GRUB_MACHINE_EFI
+#include <grub/efi/efi.h>
+#define GRUB_EFI_LOADER_GUID \
+        { 0x4a67b082, 0x0a4c, 0x41cf, { 0xb6, 0xc7, 0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f } }
+
+static grub_guid_t grub_efi_loader_guid = GRUB_EFI_LOADER_GUID;
+#endif
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define GRUB_BLS_CONFIG_PATH "/loader/entries/"
@@ -1537,6 +1545,12 @@ blsuki_create_entries (bool show_default, bool show_non_default, char *entry_id,
   const char *def_entry = NULL;
   grub_blsuki_entry_t *entry = NULL;
   int idx = 0;
+#ifdef GRUB_MACHINE_EFI
+  grub_size_t size = 0, r_size;
+  grub_efi_char16_t *efi_entries = NULL;
+  grub_efi_char16_t *p = NULL;
+  char* tmp = NULL;
+#endif
 
   def_entry = grub_env_get ("default");
 
@@ -1558,10 +1572,57 @@ blsuki_create_entries (bool show_default, bool show_non_default, char *entry_id,
 	    uki_create_entry (entry);
 #endif
 	  entry->visible = true;
+#ifdef GRUB_MACHINE_EFI
+	  grub_size_t len = grub_strlen (entry->filename);
+
+	  if (len > BLS_EXT_LEN && grub_strcmp (entry->filename + len - BLS_EXT_LEN, ".conf") == 0) 
+	    size += (len - BLS_EXT_LEN + 1);
+	  else
+	    size += (len + 1);
+#endif
 	}
 
       idx++;
     }
+
+#ifdef GRUB_MACHINE_EFI
+  efi_entries = grub_malloc (size * sizeof (grub_efi_char16_t));
+  if (efi_entries == NULL)
+    return grub_errno;
+
+  p = efi_entries;
+  r_size = size;
+  FOR_BLSUKI_ENTRIES (entry)
+    {
+      if (entry->visible)
+	{
+	  grub_size_t len = grub_strlen (entry->filename);
+	  
+	  if (len > BLS_EXT_LEN && grub_strcmp (entry->filename + len - BLS_EXT_LEN, ".conf") == 0) 
+	    len -= BLS_EXT_LEN;
+
+	  if (r_size < (len + 1))
+	    {
+	      grub_dprintf ("blsuki", "LoaderEntries buffer too small\n");
+	      break;
+	    }
+	
+	  r_size -= (len + 1);
+	  tmp = entry->filename;
+	  while (len)
+	    {
+	      *p++ = (grub_efi_char16_t) *tmp++;
+	      len--;
+	    }
+	  *p++ = (grub_efi_char16_t) '\0';
+	}
+    }
+  grub_efi_set_variable_with_attributes ("LoaderEntries", &grub_efi_loader_guid,
+					      efi_entries, (size - r_size) * sizeof (grub_efi_char16_t),
+					      GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS |
+					      GRUB_EFI_VARIABLE_RUNTIME_ACCESS);
+  grub_free (efi_entries);
+#endif
 
   return GRUB_ERR_NONE;
 }

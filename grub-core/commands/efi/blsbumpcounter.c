@@ -60,8 +60,14 @@ grub_cmd_bumpcounters (grub_extcmd_context_t ctxt __attribute__ ((unused)),
 
   /* Look for the start of the count
      If no '+' symbol has been found, the boot counting isn't enabled for the selected entry */
+  char* new_path = grub_xasprintf ("%s.conf", id);
+  grub_efi_set_variable_to_string("LoaderEntrySelected", &grub_efi_loader_guid, new_path,
+					      GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS |
+					      GRUB_EFI_VARIABLE_RUNTIME_ACCESS);
+  grub_free(new_path);
   if (grub_strrchr(id, '+') == NULL) {
     grub_dprintf("bls_bumpcounter", "boot counting is not in effect for id %s\n", id);
+
     return GRUB_ERR_NONE;
   }
 
@@ -183,7 +189,6 @@ grub_cmd_bumpcounters (grub_extcmd_context_t ctxt __attribute__ ((unused)),
       goto finish;
   }
 
-  char *new_path;
   if (tries == -1) {
     /* This is the first try, rename accordingly */
     new_path = grub_xasprintf ("%s+%d-1.conf", id, tries_left);
