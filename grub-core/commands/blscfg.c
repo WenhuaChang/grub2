@@ -332,9 +332,37 @@ finish:
 /* NULL string pointer returned if nothing found */
 static void
 split_package_string (char *package_string, char **name,
-                     char **version, char **release)
+                     char **version, char **release, int *tries_left)
 {
-  char *package_version, *package_release;
+  char *package_version, *package_release, *tries_left_str, *tmp;
+
+  *tries_left = -1;
+  /* Search for the start of the tries left, as per boot assessment */
+  tries_left_str = grub_strrchr(package_string, '+');
+  if (tries_left_str != NULL)
+    {
+      /* If there the number of tries available is after the number of tries left (e.g. +1-2)
+         stop the string at the '-' delimiter, so that strtol
+         does the parsing of the first part and skip the second */
+      tmp = grub_strrchr(tries_left_str, '-');
+      if (tmp != NULL)
+        {
+          *tmp = '\0';
+        }
+      tmp = tries_left_str;
+      *tries_left = grub_strtol(++tmp, (const char **)&tmp, 10);
+
+      /* Conversion failed */
+      if (tmp == tries_left_str)
+        {
+          /* Reset the counter */
+          *tries_left = -1;
+        }
+      else
+        {
+          *tries_left_str = '\0';
+        }
+    }
 
   /* Release */
   package_release = grub_strrchr (package_string, '-');
@@ -381,9 +409,23 @@ split_cmp(char *nvr0, char *nvr1, int has_name)
   int ret = 0;
   char *name0, *version0, *release0;
   char *name1, *version1, *release1;
+  int tries_left0;
+  int tries_left1;
 
-  split_package_string(nvr0, has_name ? &name0 : NULL, &version0, &release0);
-  split_package_string(nvr1, has_name ? &name1 : NULL, &version1, &release1);
+  split_package_string(nvr0, has_name ? &name0 : NULL, &version0, &release0, &tries_left0);
+  split_package_string(nvr1, has_name ? &name1 : NULL, &version1, &release1, &tries_left1);
+
+  /* Check for systemd Automatic Boot Assessment
+     0 has no tries left, while 1 doesn't have a boot count / still has tries left */
+  if (tries_left0 == 0 && tries_left1 != 0)
+    {
+      return -1;
+    }
+  /* viceversa, b has no tries left */
+  else if (tries_left0 != 0 && tries_left1 == 0)
+    {
+      return 1;
+    }
 
   if (has_name)
     {
