@@ -869,6 +869,13 @@ module = {
 };
 
 module = {
+  name = blsbumpcounter;
+  common = commands/blsbumpcounter.c;
+  efi = commands/efi/blsbumpcounter.c;
+};
+
+
+module = {
   name = boot;
   common = commands/boot.c;
   i386_pc = lib/i386/pc/biosnum.c;
