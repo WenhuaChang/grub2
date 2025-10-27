@@ -332,6 +332,29 @@ grub_menu_execute_entry(grub_menu_entry_t entry, int auto_boot)
     grub_env_set ("default", ptr + 1);
   else
     grub_env_unset ("default");
+
+#ifdef GRUB_MACHINE_EFI
+  const char* val = grub_env_get ("enable_blscfg");
+  if (val && (val[0] == '1' || val[0] == 'y') && entry->blsuki != NULL)
+    {
+      char* id = grub_strdup (entry->blsuki->filename);
+
+      if (id == NULL)
+	grub_print_error ();
+      else
+	{
+	  char* args[] = { id };
+	  grub_size_t id_len = grub_strlen (id);
+
+	  if (id_len >= 4 && grub_strcmp (id + id_len - 4, ".conf") == 0)
+	    id[id_len - 4] = '\0';
+	  grub_command_execute ("bls_bumpcounter", 1, args);
+	  grub_free (id);
+	}
+    }
+  grub_env_unset ("enable_blscfg");
+#endif
+
 #ifdef GRUB_MACHINE_IEEE1275
   char *cas_entry_id = NULL;
   char *cas_entry_source;
