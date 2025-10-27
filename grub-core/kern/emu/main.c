@@ -195,6 +195,12 @@ static struct argp argp = {
   NULL, help_filter, NULL
 };
 
+void
+ignore (int num __attribute__ ((unused)))
+{
+  return;
+}
+
 
 
 #pragma GCC diagnostic ignored "-Wmissing-prototypes"
@@ -264,7 +270,7 @@ main (int argc, char *argv[])
       sleep (1);
     }
 
-  signal (SIGINT, SIG_IGN);
+  signal (SIGINT, (sighandler_t) &ignore);
   grub_console_init ();
   grub_host_init ();
 
