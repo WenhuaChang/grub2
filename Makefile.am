@@ -51,8 +51,12 @@ libgrub.pp: config-util.h grub_script.tab.h grub_script.yy.h $(libgrubmods_a_SOU
 	  -D'GRUB_MOD_INIT(x)=@MARKER@x@' $^ > $@ || (rm -f $@; exit 1)
 CLEANFILES += libgrub.pp
 
+# the grep/sed ensures that every other file system gets tested before minix*"
+# see https://savannah.gnu.org/bugs/?57652
+# see https://bugzilla.suse.com/show_bug.cgi?id=1231604
 libgrub_a_init.lst: libgrub.pp
 	cat $< | grep '^@MARKER@' | sed 's/@MARKER@\(.*\)@/\1/g' | sort -u > $@ || (rm -f $@; exit 1)
+	if grep ^minix $@ >/dev/null; then sed -n '/^minix/p;/^minix/!H;$${x;s/^\n//;p}' < $@ > $@.tmp && mv $@.tmp $@; fi
 CLEANFILES += libgrub_a_init.lst
 
 libgrub_a_init.c: libgrub_a_init.lst $(top_srcdir)/geninit.sh
