@@ -1137,7 +1137,8 @@ grub_video_vbe_setup (unsigned int width, unsigned int height,
 
 	page_size = framebuffer.mode_info.pitch * framebuffer.mode_info.height;
 
-	if (vram_size >= 2 * page_size)
+	/* avoid page flipping mode (bsc#1245636) */
+	if (0 && vram_size >= 2 * page_size)
 	  err = grub_video_fb_setup (mode_type, mode_mask,
 				     &framebuffer.mode_info,
 				     framebuffer.ptr,
