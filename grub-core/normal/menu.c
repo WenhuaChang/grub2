@@ -331,6 +331,23 @@ grub_menu_execute_entry(grub_menu_entry_t entry, int auto_boot)
     grub_env_set ("default", ptr + 1);
   else
     grub_env_unset ("default");
+
+#ifdef GRUB_MACHINE_EFI
+  const char* val = grub_env_get ("enable_blscfg");
+  if (val && (val[0] == '1' || val[0] == 'y') && entry->bls != NULL)
+    {
+      char* id = grub_strdup (entry->bls->filename);
+      if (id == NULL)
+        {
+          grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
+        } else {
+          char* args[] = { id };
+          grub_command_execute ("bls_bumpcounter", 1, args);
+        }
+    }
+  grub_env_unset ("enable_blscfg");
+#endif
+
 #ifdef GRUB_MACHINE_IEEE1275
   char *cas_entry_id = NULL;
   char *cas_entry_source;
