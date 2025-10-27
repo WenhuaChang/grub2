@@ -895,7 +895,7 @@ static void create_entry (struct bls_entry *entry)
   do
     {
       dotconf = grub_strstr(dotconf, ".conf");
-    } while (dotconf != NULL && dotconf[5] != '\0');
+    } while (dotconf != NULL && dotconf[5] != '\0' && *(++dotconf));
   if (dotconf)
     dotconf[0] = '\0';
 
