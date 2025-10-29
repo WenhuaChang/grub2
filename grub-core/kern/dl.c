@@ -38,10 +38,6 @@
 #include <grub/efi/memory.h>
 #endif
 
-#ifdef GRUB_MACHINE_EFI
-#include <grub/efi/memory.h>
-#endif
-
 /* Platforms where modules are in a readonly area of memory.  */
 #if defined(GRUB_MACHINE_QEMU)
 #define GRUB_MODULES_MACHINE_READONLY
