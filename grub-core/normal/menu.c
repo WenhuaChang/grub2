@@ -599,26 +599,6 @@ get_entry_number (grub_menu_t menu, const char *name)
 	      entry = i;
 	      break;
 	    }
-
-	  if (e->bls)
-	    {
-	      char *v, *ext;
-
-	      if ((v = grub_strdup (val)) &&
-		  (ext = grub_strrchr (v, '.')) &&
-		  grub_strcmp (ext, ".conf") == 0)
-		{
-		  *ext = '\0';
-		  if (menuentry_eq (e->id, v))
-		    {
-		      entry = i;
-		      grub_free (v);
-		      break;
-		    }
-		}
-	      grub_free (v);
-	    }
-
 	  e = e->next;
 
 	  /* Skip hidden entries */
