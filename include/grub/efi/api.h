@@ -404,11 +404,6 @@
     { 0x93, 0x87, 0x6d, 0x87, 0x60, 0x50, 0xdc, 0x67 } \
   }
 
-#define GRUB_EFI_MEMORY_ATTRIBUTE_PROTOCOL_GUID \
-  { 0xf4560cf6, 0x40ec, 0x4b4a, \
-    { 0xa1, 0x92, 0xbf, 0x1d, 0x57, 0xd0, 0xb1, 0x89 } \
-  }
-
 struct grub_efi_sal_system_table
 {
   grub_uint32_t signature;
@@ -2139,25 +2134,5 @@ struct grub_efi_ip6_config_manual_address {
   grub_efi_uint8_t prefix_length;
 };
 typedef struct grub_efi_ip6_config_manual_address grub_efi_ip6_config_manual_address_t;
-
-struct grub_efi_memory_attribute_protocol
-{
-  grub_efi_status_t (__grub_efi_api *get_memory_attributes) (
-			    struct grub_efi_memory_attribute_protocol *this,
-			    grub_efi_physical_address_t base_address,
-			    grub_efi_uint64_t length,
-			    grub_efi_uint64_t *attributes);
-  grub_efi_status_t (__grub_efi_api *set_memory_attributes) (
-			    struct grub_efi_memory_attribute_protocol *this,
-			    grub_efi_physical_address_t base_address,
-			    grub_efi_uint64_t length,
-			    grub_efi_uint64_t attributes);
-  grub_efi_status_t (__grub_efi_api *clear_memory_attributes) (
-			    struct grub_efi_memory_attribute_protocol *this,
-			    grub_efi_physical_address_t base_address,
-			    grub_efi_uint64_t length,
-			    grub_efi_uint64_t attributes);
-};
-typedef struct grub_efi_memory_attribute_protocol grub_efi_memory_attribute_protocol_t;
 
 #endif /* ! GRUB_EFI_API_HEADER */
