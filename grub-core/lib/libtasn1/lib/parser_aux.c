@@ -26,8 +26,7 @@
 #include "gstr.h"
 #include "structure.h"
 #include "element.h"
-
-#define c_isdigit grub_isdigit
+#include "c-ctype.h"
 
 char _asn1_identifierMissing[ASN1_MAX_NAME_SIZE + 1];	/* identifier name not found */
 
@@ -41,7 +40,7 @@ char _asn1_identifierMissing[ASN1_MAX_NAME_SIZE + 1];	/* identifier name not fou
 #ifdef __clang__
 __attribute__((no_sanitize ("integer")))
 #endif
-     __attribute__((__pure__)) static unsigned int _asn1_hash_name (const char *x)
+     _GL_ATTRIBUTE_PURE static unsigned int _asn1_hash_name (const char *x)
 {
   const unsigned char *s = (unsigned char *) x;
   unsigned h = 0;
@@ -633,7 +632,7 @@ _asn1_ltostr (int64_t v, char str[LTOSTR_MAX_SIZE])
   count = 0;
   do
     {
-      d = grub_divmod64(val, 10, NULL);
+      d = val / 10;
       r = val - d * 10;
       temp[start + count] = '0' + (char) r;
       count++;

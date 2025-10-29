@@ -34,16 +34,29 @@
 #ifndef LIBTASN1_H
 # define LIBTASN1_H
 
-/* grub: ASN1_API is not used */
-# define ASN1_API
+# ifndef ASN1_API
+#  if defined ASN1_BUILDING && defined HAVE_VISIBILITY && HAVE_VISIBILITY
+#   define ASN1_API __attribute__((__visibility__("default")))
+#  elif defined ASN1_BUILDING && defined _MSC_VER && ! defined ASN1_STATIC
+#   define ASN1_API __declspec(dllexport)
+#  elif defined _MSC_VER && ! defined ASN1_STATIC
+#   define ASN1_API __declspec(dllimport)
+#  else
+#   define ASN1_API
+#  endif
+# endif
 
-/* grub: all our supported compilers support these attributes */
-# define __LIBTASN1_CONST__  __attribute__((const))
-# define __LIBTASN1_PURE__  __attribute__((pure))
+# ifdef __GNUC__
+#  define __LIBTASN1_CONST__  __attribute__((const))
+#  define __LIBTASN1_PURE__  __attribute__((pure))
+# else
+#  define __LIBTASN1_CONST__
+#  define __LIBTASN1_PURE__
+# endif
 
-
-# include <grub/types.h>
-# include <grub/time.h>
+# include <sys/types.h>
+# include <time.h>
+# include <stdio.h>		/* for FILE* */
 
 # ifdef __cplusplus
 extern "C"
