@@ -117,6 +117,16 @@ struct find_entry_info
 
 static grub_blsuki_entry_t *entries = NULL;
 
+struct bls_fragment
+{
+  struct bls_fragment *next;
+  struct bls_fragment *prev;
+  char *filename;
+};
+typedef struct bls_fragment *bls_fragment_t;
+
+static bls_fragment_t fragments = NULL;
+
 #define FOR_BLSUKI_ENTRIES(var) FOR_LIST_ELEMENTS (var, entries)
 
 /*
@@ -641,6 +651,69 @@ blsuki_read_entry (const char *filename,
  finish:
   if (f != NULL)
     grub_file_close (f);
+
+  return 0;
+}
+
+static int
+collect_fragments (
+    const char *filename,
+    const struct grub_dirhook_info *dirhook_info __attribute__ ((__unused__)),
+    void *data __attribute__ ((__unused__)))
+{
+  bls_fragment_t fragment, f, last;
+
+  if (filename[0] == '.')
+    return 0;
+
+  fragment = grub_zalloc (sizeof (*fragment));
+  if (fragment == NULL)
+    return 0;
+
+  fragment->filename = grub_strdup (filename);
+  if (fragment->filename == NULL)
+    {
+      grub_free (fragment);
+      return 0;
+    }
+
+  if (fragments == NULL)
+    {
+      fragments = fragment;
+      return 0;
+    }
+
+  FOR_LIST_ELEMENTS (f, fragments)
+    {
+      int rc;
+      rc = grub_strcmp (fragment->filename, f->filename);
+      if (rc == 0)
+	{
+	  grub_free (fragment);
+	  return 0;
+	}
+      if (rc < 0)
+	{
+	  fragment->next = f;
+	  if (f->prev)
+	    f->prev->next = fragment;
+	  fragment->prev = f->prev;
+	  f->prev = fragment;
+	  if (f == fragments)
+	    {
+	      fragments = fragment;
+	      fragment->prev = NULL;
+	    }
+	  return 0;
+	}
+      last = f;
+    }
+
+  if (last)
+    {
+      last->next = fragment;
+      fragment->prev = last;
+    }
 
   return 0;
 }
@@ -1200,12 +1273,23 @@ blsuki_find_entry (struct find_entry_info *info, bool enable_fallback, enum blsu
       read_entry_info.devid = info->devid;
       read_entry_info.cmd_type = cmd_type;
 
-      r = dir_fs->fs_dir (dir_dev, read_entry_info.dirname, blsuki_read_entry,
+      r = dir_fs->fs_dir (dir_dev, read_entry_info.dirname, collect_fragments,
 			  &read_entry_info);
       if (r != 0)
 	{
 	  grub_dprintf ("blsuki", "blsuki_read_entry returned error\n");
 	  grub_errno = GRUB_ERR_NONE;
+	}
+
+      while (fragments != NULL)
+	{
+	  bls_fragment_t fragment = fragments;
+
+	  fragments = fragments->next;
+	  grub_dprintf ("blsuki", "read_entry: %s\n", fragment->filename);
+	  blsuki_read_entry (fragment->filename, NULL, &read_entry_info);
+	  grub_free (fragment->filename);
+	  grub_free (fragment);
 	}
 
       /*
