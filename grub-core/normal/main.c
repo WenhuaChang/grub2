@@ -152,6 +152,227 @@ read_envblk_from_cmdpath (void)
   grub_free (envfile);
 }
 
+struct theme_dirinfo
+{
+  const char *dev;
+  const char *name;
+  int found;
+  char *fonts[8];
+  grub_size_t num_font;
+};
+
+static int
+theme_dir_iter (const char *filename, const struct grub_dirhook_info *info, void *data)
+{
+  grub_size_t n, *pnum;
+  char **p;
+  struct theme_dirinfo *theme_dir = (struct theme_dirinfo *) data;
+
+  if (info->dir)
+    return 0;
+
+  if (grub_strcmp (filename, "theme.txt") == 0)
+    {
+      theme_dir->found = 1;
+      return 0;
+    }
+
+  n = grub_strlen (filename);
+  if (n <= 4)
+    return 0;
+
+  if (grub_strcmp (filename + n - 4, ".pf2") != 0)
+    return 0;
+
+  n = sizeof (theme_dir->fonts) / sizeof (*p);
+  pnum = &theme_dir->num_font;
+  if (*pnum >= n)
+    return 0;
+
+  p = theme_dir->fonts + *pnum;
+  *p = grub_strdup (filename);
+  if (*p == NULL)
+    {
+      grub_print_error ();
+      return 0;
+    }
+  ++*pnum;
+
+  return 0;
+}
+
+static void
+bls_set_terminal (const char *type)
+{
+  grub_device_t dev;
+  grub_fs_t fs;
+  struct theme_dirinfo dirinfo;
+  grub_size_t i;
+  grub_uint8_t in = 0;
+  grub_uint8_t out = 0;
+  char *cmd = NULL;
+  char *args = NULL;
+
+  enum {
+    INPUT_CONSOLE_IDX = 0,
+    INPUT_SERIAL_IDX,
+    NUM_CONSOLE_INPUT
+  };
+
+  enum {
+    OUTPUT_CONSOLE_IDX = 0,
+    OUTPUT_GFXTERM_IDX,
+    OUTPUT_SERIAL_IDX,
+    NUM_CONSOLE_OUTPUT
+  };
+
+  const char *term_input[NUM_CONSOLE_INPUT] = {
+    [INPUT_CONSOLE_IDX] = "console",
+    [INPUT_SERIAL_IDX] = "serial"
+  };
+
+  const char *term_output[NUM_CONSOLE_OUTPUT] = {
+    [OUTPUT_CONSOLE_IDX] = "console",
+    [OUTPUT_GFXTERM_IDX] = "gfxterm",
+    [OUTPUT_SERIAL_IDX] = "serial"
+  };
+
+  if (type == NULL)
+    type = grub_env_get ("blscfg_console_type");
+
+  if (type && grub_strstr (type, term_output[OUTPUT_CONSOLE_IDX]) != NULL)
+    {
+      out |= 1 << OUTPUT_CONSOLE_IDX;
+      in |= 1 << INPUT_CONSOLE_IDX;
+    }
+  if (type && grub_strstr (type, term_output[OUTPUT_GFXTERM_IDX]) != NULL)
+    {
+      out |= 1 << OUTPUT_GFXTERM_IDX;
+      in |= 1 << INPUT_CONSOLE_IDX;
+    }
+  if (type && grub_strstr (type, term_output[OUTPUT_SERIAL_IDX]) != NULL)
+    {
+      out |= 1 << OUTPUT_SERIAL_IDX;
+      in |= 1 << INPUT_SERIAL_IDX;
+    }
+
+  if (out == 0)
+    {
+      out |= 1 << OUTPUT_GFXTERM_IDX;
+      in |= 1 << INPUT_CONSOLE_IDX;
+    }
+
+  if (out & 1 << OUTPUT_SERIAL_IDX)
+    {
+      const char *serial = grub_env_get ("blscfg_serial_command");
+
+      if (serial == NULL)
+	serial = "serial";
+      cmd = grub_xasprintf ("%s\n", serial);
+      if (cmd == NULL)
+	{
+	  grub_print_error ();
+	  return;
+	}
+      grub_parser_execute (cmd);
+      grub_free (cmd);
+    }
+
+  for (i = 0; i < NUM_CONSOLE_INPUT; ++i)
+    {
+      if (in & (1 << i) && args == NULL)
+	{
+	  if (args == NULL)
+	    args = grub_strdup (term_input[i]);
+	  else
+	    {
+	      char *t = args;
+
+	      args = grub_xasprintf ("%s %s", args, term_input[i]);
+	      grub_free (t);
+	    }
+	  if (args == NULL)
+	    {
+	      grub_print_error ();
+	      return;
+	    }
+	}
+    }
+
+  if (args == NULL)
+    return;
+
+  cmd = grub_xasprintf ("terminal_input %s\n", args);
+  if (cmd == NULL)
+    {
+      grub_free (args);
+      grub_print_error ();
+      return;
+    }
+  grub_parser_execute (cmd);
+  grub_free (args);
+  grub_free (cmd);
+
+  for (cmd = NULL, i = 0; i < NUM_CONSOLE_OUTPUT; ++i)
+    {
+      if (out & (1 << i))
+	{
+	  if (cmd == NULL)
+	    cmd = grub_xasprintf ("terminal_output %s\n", term_output[i]);
+	  else
+	    {
+	      grub_free (cmd);
+	      cmd = grub_xasprintf ("terminal_output --append %s\n", term_output[i]);
+	    }
+	  if (cmd == NULL)
+	    {
+	      grub_print_error ();
+	      return;
+	    }
+	  grub_parser_execute (cmd);
+	}
+    }
+
+  if (cmd != NULL)
+    grub_free (cmd);
+
+  dirinfo.dev = "memdisk";
+  dirinfo.name = "/boot/grub/themes";
+  dirinfo.found = 0;
+  dirinfo.num_font = 0;
+  dev = grub_device_open (dirinfo.dev);
+  if (dev == NULL)
+    return;
+
+  fs = grub_fs_probe (dev);
+  if (fs == NULL)
+    {
+      grub_errno = GRUB_ERR_NONE;
+      grub_device_close (dev);
+      return;
+    }
+
+  fs->fs_dir (dev, dirinfo.name, theme_dir_iter, &dirinfo);
+
+  for (i = 0; i < dirinfo.num_font; ++i)
+    {
+      cmd = grub_xasprintf ("loadfont (%s)%s/%s\n", dirinfo.dev, dirinfo.name, dirinfo.fonts[i]);
+      grub_parser_execute (cmd);
+      grub_free (cmd);
+    }
+
+  if (dirinfo.found)
+    {
+      cmd = grub_xasprintf ("set theme=(%s)%s/theme.txt\nexport theme\n", dirinfo.dev, dirinfo.name);
+      grub_parser_execute (cmd);
+      grub_free (cmd);
+    }
+
+  for (i = 0; i < dirinfo.num_font; ++i)
+    grub_free (dirinfo.fonts[i]);
+  grub_device_close (dev);
+}
+
 static grub_menu_t
 read_blscfg (void)
 {
@@ -166,6 +387,7 @@ read_blscfg (void)
       grub_env_set_menu (newmenu);
     }
 
+  bls_set_terminal (NULL);
   grub_parser_execute ((char *)"blscfg\n");
   return newmenu;
 }
