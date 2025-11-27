@@ -373,6 +373,17 @@ bls_set_terminal (const char *type)
   grub_device_close (dev);
 }
 
+static void
+bls_auto_firmware (void)
+{
+  const char *val = grub_env_get ("blscfg_auto_firmware");
+
+  if (val && (val[0] == '0' || val[0] == 'n'))
+    return;
+
+  grub_parser_execute ((char *) "efifwsetup_auto\n");
+}
+
 static grub_menu_t
 read_blscfg (void)
 {
@@ -389,6 +400,7 @@ read_blscfg (void)
 
   bls_set_terminal (NULL);
   grub_parser_execute ((char *)"blscfg\n");
+  bls_auto_firmware ();
   return newmenu;
 }
 

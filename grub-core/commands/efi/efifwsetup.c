@@ -24,6 +24,7 @@
 #include <grub/efi/efi.h>
 #include <grub/command.h>
 #include <grub/i18n.h>
+#include <grub/normal.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -65,7 +66,7 @@ grub_cmd_fwsetup (grub_command_t cmd __attribute__ ((unused)),
   return GRUB_ERR_BUG;
 }
 
-static grub_command_t cmd = NULL;
+static grub_command_t cmd = NULL, cmd_fwsetup_auto = NULL;
 
 static grub_efi_boolean_t
 efifwsetup_is_supported (void)
@@ -89,14 +90,43 @@ efifwsetup_is_supported (void)
   return ret;
 }
 
+static grub_err_t
+grub_cmd_efifwsetup_auto (grub_command_t command __attribute__ ((unused)),
+			  int argc __attribute__ ((unused)),
+			  char **args __attribute__ ((unused)))
+{
+  const char *argv[] = { "UEFI Firmware Settings" };
+
+  if (efifwsetup_is_supported () == false)
+    return GRUB_ERR_NONE;
+
+  grub_normal_add_menu_entry (1,
+			      argv,
+			      NULL,
+			      "uefi-firmware",
+			      NULL,
+			      NULL,
+			      NULL,
+			      "fwsetup\n",
+			      0,
+			      0,
+			      NULL,
+			      NULL);
+  return GRUB_ERR_NONE;
+}
+
 GRUB_MOD_INIT (efifwsetup)
 {
   cmd = grub_register_command ("fwsetup", grub_cmd_fwsetup, NULL,
                                N_("Reboot into firmware setup menu."));
+  cmd_fwsetup_auto = grub_register_command ("efifwsetup_auto", grub_cmd_efifwsetup_auto,
+			       NULL, N_("Show UEFI fwsetup menu automatically."));
 }
 
 GRUB_MOD_FINI (efifwsetup)
 {
   if (cmd)
     grub_unregister_command (cmd);
+  if (cmd_fwsetup_auto != NULL)
+    grub_unregister_command (cmd_fwsetup_auto);
 }
