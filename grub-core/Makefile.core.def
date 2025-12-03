@@ -2749,3 +2749,10 @@ module = {
   name = crypttab;
   common = commands/crypttab.c;
 };
+
+module = {
+  name = btrfs_snapcfg;
+  common = commands/btrfs_snapcfg.c;
+  enable = efi;
+  enable = emu;
+};
