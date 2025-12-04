@@ -39,11 +39,16 @@ enum
     GRUB_BTRFS_TREE_ROOT_OBJECTID = 0x100,
   };
 
+#define GRUB_BTRFS_ROOT_SUBVOL_RDONLY	(1ULL << 0)
+
 struct grub_btrfs_root_item
 {
   grub_uint8_t dummy[0xb0];
   grub_uint64_t tree;
-  grub_uint64_t inode;
+  grub_uint64_t byte_limit;
+  grub_uint64_t bytes_unused;
+  grub_uint64_t last_snapshot;
+  grub_uint64_t flags;
 };
 
 struct grub_btrfs_key

@@ -1291,7 +1291,7 @@ grub_btrfs_read_logical (struct grub_btrfs_data *data, grub_disk_addr_t addr,
 static grub_err_t
 get_fs_root(struct grub_btrfs_data *data, grub_uint64_t tree,
             grub_uint64_t objectid, grub_uint64_t offset,
-            grub_uint64_t *fs_root);
+            grub_uint64_t *fs_root, grub_uint64_t *flags);
 
 static grub_err_t
 lookup_root_by_id(struct grub_btrfs_data *data, grub_uint64_t id)
@@ -1299,7 +1299,7 @@ lookup_root_by_id(struct grub_btrfs_data *data, grub_uint64_t id)
   grub_err_t err;
   grub_uint64_t tree;
 
-  err = get_fs_root(data, data->sblock.root_tree, id, -1, &tree);
+  err = get_fs_root (data, data->sblock.root_tree, grub_cpu_to_le64 (id), -1, &tree, NULL);
   if (!err)
     data->fs_tree = tree;
   return err;
@@ -2921,7 +2921,7 @@ find_mtab_subvol_tree (const char *path, char **path_in_subvol)
 static grub_err_t
 get_fs_root(struct grub_btrfs_data *data, grub_uint64_t tree,
             grub_uint64_t objectid, grub_uint64_t offset,
-            grub_uint64_t *fs_root)
+            grub_uint64_t *fs_root, grub_uint64_t *flags)
 {
   grub_err_t err;
   struct grub_btrfs_key key_in = {
@@ -2951,6 +2951,9 @@ get_fs_root(struct grub_btrfs_data *data, grub_uint64_t tree,
 
   *fs_root = ri.tree;
 
+  if (flags)
+    *flags = ri.flags;
+
   return GRUB_ERR_NONE;
 }
 
@@ -2959,6 +2962,7 @@ static const struct grub_arg_option options[] = {
    N_("VARNAME"), ARG_TYPE_STRING},
   {"path-only", 'p', 0, N_("Show only the path of the subvolume."), 0, 0},
   {"id-only", 'i', 0, N_("Show only the id of the subvolume."), 0, 0},
+  {"read-only", 'r', 0, N_("Show only read-only subvolume."), 0, 0},
   {0, 0, 0, 0, 0, 0}
 };
 
@@ -2984,6 +2988,7 @@ grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
   int print = 1;
   int path_only = ctxt->state[1].set;
   int num_only = ctxt->state[2].set;
+  int read_only = ctxt->state[3].set;
   char *varname = NULL;
   char *output = NULL;
 
@@ -3010,7 +3015,7 @@ grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
 
   tree = data->sblock.root_tree;
   err = get_fs_root(data, tree, grub_cpu_to_le64_compile_time (GRUB_BTRFS_FS_TREE_OBJECTID),
-                    0, &fs_root);
+                    0, &fs_root, NULL);
   if (err)
     goto out;
 
@@ -3024,8 +3029,19 @@ grub_cmd_btrfs_list_subvols (struct grub_extcmd_context *ctxt,
     {
       char *p = NULL;
       grub_uint64_t id = key_out.offset;
+      grub_uint64_t flags;
 
       if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_REF || elemaddr == 0)
+        continue;
+
+      err = get_fs_root (data, tree, grub_cpu_to_le64 (id), -1, &fs_root, &flags);
+      if (err != GRUB_ERR_NONE)
+        {
+          grub_print_error ();
+          continue;
+        }
+
+      if (read_only && !(flags & GRUB_BTRFS_ROOT_SUBVOL_RDONLY))
         continue;
 
       if (id == GRUB_BTRFS_ROOT_VOL_OBJECTID)
@@ -3150,7 +3166,7 @@ grub_btrfs_get_parent_subvol_path (struct grub_btrfs_data *data,
   ref = (struct grub_btrfs_root_ref *)buf;
 
   err = get_fs_root(data, data->sblock.root_tree, grub_le_to_cpu64 (key_out.offset),
-                    0, &fs_root);
+                    0, &fs_root, NULL);
   if (err)
     {
       grub_free(buf);
@@ -3557,7 +3573,7 @@ GRUB_MOD_INIT (btrfs)
 				   "Set btrfs DEVICE the DIRECTORY a mountpoint of SUBVOL.");
   cmd_list_subvols = grub_register_extcmd("btrfs-list-subvols",
 					 grub_cmd_btrfs_list_subvols, 0,
-					 "[-p|-n] [-o var] DEVICE",
+					 "[-p|-n|-r] [-o var] DEVICE",
 					 "Print list of BtrFS subvolumes on "
 					 "DEVICE.", options);
   cmd_get_default_subvol = grub_register_extcmd("btrfs-get-default-subvol",
