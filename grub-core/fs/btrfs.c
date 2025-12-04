@@ -1308,7 +1308,7 @@ lookup_root_by_id(struct grub_btrfs_data *data, grub_uint64_t id)
 static grub_err_t
 find_path (struct grub_btrfs_data *data,
 	   const char *path, struct grub_btrfs_key *key,
-	   grub_uint64_t *tree, grub_uint8_t *type);
+	   grub_uint64_t *tree, grub_uint8_t *type, char **symlink);
 
 static grub_err_t
 lookup_root_by_name(struct grub_btrfs_data *data, const char *path)
@@ -1332,7 +1332,7 @@ lookup_root_by_name(struct grub_btrfs_data *data, const char *path)
   saved_tree = data->fs_tree;
   data->fs_tree = tree;
 
-  err = find_path (data, path, &key, &tree, &type);
+  err = find_path (data, path, &key, &tree, &type, NULL);
 
   data->fs_tree = saved_tree;
 
@@ -1354,7 +1354,7 @@ lookup_root_by_name_fallback(struct grub_btrfs_data *data, const char *path)
   grub_uint8_t type;
   struct grub_btrfs_key key;
 
-  err = find_path (data, path, &key, &tree, &type);
+  err = find_path (data, path, &key, &tree, &type, NULL);
   if (err)
       return grub_error(GRUB_ERR_FILE_NOT_FOUND, "couldn't locate %s\n", path);
 
@@ -2029,7 +2029,7 @@ find_pathname(struct grub_btrfs_data *data, grub_uint64_t objectid,
 static grub_err_t
 find_path (struct grub_btrfs_data *data,
 	   const char *path, struct grub_btrfs_key *key,
-	   grub_uint64_t *tree, grub_uint8_t *type)
+	   grub_uint64_t *tree, grub_uint8_t *type, char **symlink)
 {
   const char *slash = path;
   grub_err_t err;
@@ -2045,6 +2045,9 @@ find_path (struct grub_btrfs_data *data,
   char *origpath = NULL;
   unsigned symlinks_max = 32;
   const char *relpath = grub_env_get ("btrfs_relative_path");
+
+  if (symlink != NULL)
+    *symlink = NULL;
 
   follow_default = 0;
   origpath = grub_strdup (path);
@@ -2081,6 +2084,8 @@ find_path (struct grub_btrfs_data *data,
 
   while (1)
     {
+      int last_token = 0;
+
       if (!follow_default)
 	{
 	  while (path[0] == '/')
@@ -2089,7 +2094,10 @@ find_path (struct grub_btrfs_data *data,
 	    break;
 	  slash = grub_strchr (path, '/');
 	  if (!slash)
-	    slash = path + grub_strlen (path);
+	    {
+	      last_token = 1;
+	      slash = path + grub_strlen (path);
+	    }
 	  ctoken = path;
 	  ctokenlen = slash - path;
 	}
@@ -2262,6 +2270,10 @@ find_path (struct grub_btrfs_data *data,
 		       grub_strlen (path) + 1);
 	  grub_free (path_alloc);
 	  path = path_alloc = tmp;
+
+          if (last_token == 1 && symlink != NULL && *symlink == NULL)
+            *symlink = grub_strdup (path);
+
 	  if (path[0] == '/')
 	    {
               if (relpath && (relpath[0] == '1' || relpath[0] == 'y'))
@@ -2394,7 +2406,7 @@ grub_btrfs_dir (grub_device_t device, const char *path,
   if (tree)
     data->fs_tree = tree;
 
-  err = find_path (data, new_path ? new_path : path, &key_in, &tree, &type);
+  err = find_path (data, new_path ? new_path : path, &key_in, &tree, &type, NULL);
   if (new_path)
     grub_free (new_path);
 
@@ -2535,7 +2547,7 @@ grub_btrfs_open (struct grub_file *file, const char *name)
   if (tree)
     data->fs_tree = tree;
 
-  err = find_path (data, new_path ? new_path : name, &key_in, &data->tree, &type);
+  err = find_path (data, new_path ? new_path : name, &key_in, &data->tree, &type, NULL);
   if (new_path)
     grub_free (new_path);
 
@@ -2837,7 +2849,7 @@ grub_cmd_btrfs_mount_subvol (grub_command_t cmd __attribute__ ((unused)), int ar
       goto err_out;
     }
 
-  err = find_path (data, dirname, &key_in, &tree, &type);
+  err = find_path (data, dirname, &key_in, &tree, &type, NULL);
   if (err)
     goto err_out;
 
@@ -2854,7 +2866,7 @@ grub_cmd_btrfs_mount_subvol (grub_command_t cmd __attribute__ ((unused)), int ar
 
   saved_tree = data->fs_tree;
   data->fs_tree = tree;
-  err = find_path (data, subvol, &key_in, &tree, &type);
+  err = find_path (data, subvol, &key_in, &tree, &type, NULL);
   data->fs_tree = saved_tree;
 
   if (err)
@@ -2881,6 +2893,81 @@ err_out:
     grub_device_close (dev);
 
   return err;
+}
+
+static grub_err_t
+grub_cmd_btrfs_readlink (grub_command_t cmd __attribute__ ((unused)),
+			 int argc, char **argv)
+{
+  char *devname;
+  grub_device_t dev = NULL;
+  struct grub_btrfs_data *data = NULL;
+  grub_err_t err;
+  grub_uint64_t tree = 0;
+  grub_uint8_t type;
+  char *new_path = NULL;
+  const char *path;
+  struct grub_btrfs_key key_in;
+  char *symlink = NULL;
+  
+  if (argc < 1)
+    return grub_error (GRUB_ERR_BAD_ARGUMENT, "file name required");
+
+  devname = grub_file_get_device_name(argv[0]);
+  if (!devname)
+    {
+      grub_print_error ();
+      return GRUB_ERR_NONE;
+    }
+
+  path = grub_strchr (argv[0], ')');
+  if (path == NULL)
+    return GRUB_ERR_NONE;
+  else
+    path++;
+
+  dev = grub_device_open (devname);
+  grub_free (devname);
+  if (!dev)
+    {
+      grub_print_error ();
+      return GRUB_ERR_NONE;
+    }
+
+  data = grub_btrfs_mount (dev);
+  if (!data)
+    {
+      grub_print_error ();
+      grub_device_close (dev);
+      return GRUB_ERR_NONE;
+    }
+
+  tree = find_mtab_subvol_tree (path, &new_path);
+
+  if (tree)
+    data->fs_tree = tree;
+
+  err = find_path (data, new_path ? new_path : path, &key_in, &data->tree, &type, &symlink);
+  
+  grub_free (new_path);
+
+  if (err)
+    {
+      grub_print_error ();
+      grub_btrfs_unmount (data);
+      grub_free (symlink);
+      grub_device_close (dev);
+      return GRUB_ERR_NONE;
+    }
+
+  if (symlink)
+    {
+      grub_printf ("%s\n", symlink);
+      grub_free (symlink);
+    }
+  grub_btrfs_unmount (data);
+  grub_device_close (dev);
+  return GRUB_ERR_NONE;
 }
 
 grub_uint64_t
@@ -3387,6 +3474,7 @@ static struct grub_fs grub_btrfs_fs = {
 
 static grub_command_t cmd_info;
 static grub_command_t cmd_mount_subvol;
+static grub_command_t cmd_readlink;
 static grub_extcmd_t cmd_list_subvols;
 static grub_extcmd_t cmd_get_default_subvol;
 
@@ -3581,6 +3669,9 @@ GRUB_MOD_INIT (btrfs)
 					 "[-p|-n] [-o var] DEVICE",
 					 "Print default BtrFS subvolume on "
 					 "DEVICE.", options);
+  cmd_readlink = grub_register_command("btrfs-readlink", grub_cmd_btrfs_readlink,
+				   "FILE",
+				   "Print Symlink of FILE.");
   grub_register_variable_hook ("btrfs_subvol", subvol_get_env,
                                subvol_set_env);
   grub_register_variable_hook ("btrfs_subvolid", subvolid_get_env,
@@ -3598,6 +3689,7 @@ GRUB_MOD_FINI (btrfs)
   grub_register_variable_hook ("btrfs_subvolid", NULL, NULL);
   grub_register_variable_hook ("btrfs_relative_path", NULL, NULL);
   grub_unregister_command (cmd_info);
+  grub_unregister_command (cmd_readlink);
   grub_unregister_extcmd (cmd_list_subvols);
   grub_fs_unregister (&grub_btrfs_fs);
 }
